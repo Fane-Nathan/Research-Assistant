@@ -27,6 +27,7 @@ st.set_page_config(
 
 # --- Other Imports ---
 import logging
+import logging.handlers # Added for file logging
 import math
 import nltk
 # import ssl # ssl import seems unused, can be removed if not needed
@@ -43,15 +44,32 @@ import pickle # For BM25 index loading/saving (indirectly via DataManager)
 from rank_bm25 import BM25Okapi # type: ignore # For rebuilding BM25 index
 
 # --- Basic Logging Setup ---
+# Configure console logging (what you see in the terminal)
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - [App] %(message)s',
+    format='%(asctime)s - %(levelname)s - [App-Console] %(message)s', # Added a tag to distinguish console logs if needed
     force=True
 )
-logger = logging.getLogger(__name__)
+
+# Get the root logger or a specific logger
+# Using the root logger here to capture logs from all modules that use standard logging
+logger = logging.getLogger() # Get root logger
+logger.setLevel(logging.INFO) # Ensure root logger level is set
+
+# Create a file handler to write logs to a file
+log_file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "app.log")
+file_handler = logging.FileHandler(log_file_path, mode='a') # 'a' for append
+file_handler.setLevel(logging.INFO) # Set level for file handler
+
+# Create a formatter for the file logs
+file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - [%(name)s] %(message)s')
+file_handler.setFormatter(file_formatter)
+
+# Add the file handler to the logger
+logger.addHandler(file_handler)
 
 # --- Path Setup ---
-logger.info("Setting up sys.path...")
+logger.info("Setting up sys.path...") # This will now go to both console and file
 project_root = os.path.dirname(os.path.abspath(__file__))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
@@ -71,13 +89,13 @@ load_components = None
 
 try:
     from hybrid_search_rag import config
-    from scripts.cli import ( 
+    from scripts.cli import (
         load_components,
-        run_recommendation, 
+        run_recommendation,
         setup_data_and_fetch,
         run_arxiv_search,
-        chunk_text_by_sentences, 
-        check_nltk_data          
+        chunk_text_by_sentences,
+        check_nltk_data
     )
     # Import necessary components for manual data handling
     from hybrid_search_rag.data_handling.data_manager import DataManager
@@ -86,7 +104,7 @@ try:
     from hybrid_search_rag.retrieval_algorithm.hybrid_recommender import NltkManager # For tokenizing BM25
 
     project_modules_loaded = True
-    logger.info("Project module imports successful.") 
+    logger.info("Project module imports successful.")
 except ImportError as e:
     st.error(f"Failed to import project modules (ImportError). Check setup and ensure scripts/cli.py and hybrid_search_rag package are accessible. Error: {e}")
     st.code(f"Current sys.path: {sys.path}")
@@ -109,7 +127,7 @@ if sys.platform == "win32":
 # --- Async Helper for Recommendation Submission ---
 async def handle_recommendation_submission_async(query: str, top_n: int, general_mode: bool, concise_mode: bool, answer_placeholder: Any, project_modules_loaded_flag: bool): # Renamed arg
     """Handles the recommendation submission logic asynchronously."""
-    if not project_modules_loaded_flag: 
+    if not project_modules_loaded_flag:
         st.error("Cannot recommend: Core project modules not loaded.")
         return
 
@@ -132,7 +150,7 @@ async def handle_recommendation_submission_async(query: str, top_n: int, general
 
         full_response_list = []
         error_in_stream = False
-        for chunk in response_generator: 
+        for chunk in response_generator:
             if isinstance(chunk, str) and chunk.startswith("[Error:"):
                 st.error(f"LLM Error: {chunk}", icon="❌")
                 logger.error(f"LLM generation failed: {chunk}")
@@ -140,7 +158,7 @@ async def handle_recommendation_submission_async(query: str, top_n: int, general
                 st.session_state.llm_answer = None
                 error_in_stream = True
                 break
-            
+
             full_response_list.append(chunk)
             if answer_placeholder: answer_placeholder.markdown("".join(full_response_list) + "▌", unsafe_allow_html=True)
 
@@ -168,20 +186,20 @@ if project_modules_loaded and check_nltk_data:
         if 'nltk_data_checked_app' not in st.session_state:
              with st.spinner("Checking NLTK data..."):
                  logger.info("Running initial NLTK check via imported function...")
-                 check_nltk_data() 
+                 check_nltk_data()
                  st.session_state.nltk_data_checked_app = True
                  logger.info("Initial NLTK check complete.")
     except NameError:
          st.error("NLTK check function `check_nltk_data` not found. Manual NLTK check block needed.")
          pass
-    except SystemExit: 
+    except SystemExit:
           st.error("Fatal Error: Failed to download required NLTK data during startup. App cannot continue.")
           logger.critical("NLTK download failed during initial check. Stopping app.")
-          st.stop() 
+          st.stop()
     except Exception as nltk_e:
          st.error(f"Error during initial NLTK check: {nltk_e}")
          logger.error(f"NLTK check failed during app init: {nltk_e}", exc_info=True)
-         st.stop() 
+         st.stop()
 else:
     logger.warning("Skipping NLTK check as project modules failed to load.")
 
@@ -208,7 +226,7 @@ st.divider()
 
 # --- Caching Components ---
 @st.cache_resource
-def cached_load_components(): 
+def cached_load_components():
     """
     Loads core RAG components using the imported 'load_components' function.
     Uses session state to force reload after data updates.
@@ -222,18 +240,18 @@ def cached_load_components():
     if force_reload_flag:
         logger.info("Force reload flag set, calling load_components with force_reload=True.")
         st.session_state.force_component_reload = False
-    
+
     try:
         if check_nltk_data:
             check_nltk_data()
-        
+
         if load_components is None:
             logger.error("load_components function not available - project modules failed to import")
             return False, "load_components function not available"
-            
+
         load_components(force_reload=force_reload_flag)
 
-        from scripts.cli import loaded_recommender 
+        from scripts.cli import loaded_recommender
         if loaded_recommender is not None:
              logger.info("Component loading logic successful (based on \'loaded_recommender\' indicator).")
              return True, None
@@ -243,7 +261,7 @@ def cached_load_components():
     except NameError as ne:
          logger.error(f"NameError during component loading check: {ne}. Cannot verify loaded state.", exc_info=True)
          return False, f"Error accessing loaded state indicator from 'scripts.cli'. NameError: {ne}"
-    except SystemExit: 
+    except SystemExit:
          logger.critical("NLTK download failed during component loading. Cannot proceed.")
          return False, "Failed to acquire NLTK data during component loading."
     except Exception as e:
@@ -337,13 +355,13 @@ with tab_rec:
 
             st.session_state.llm_answer = None
             st.session_state.context_sources = []
-            st.session_state.raw_context_chunks = [] 
+            st.session_state.raw_context_chunks = []
             answer_placeholder = st.empty()
 
-            top_n_val = 5 
+            top_n_val = 5
             if project_modules_loaded:
                 try:
-                    from hybrid_search_rag import config 
+                    from hybrid_search_rag import config
                     top_n_val = config.TOP_N_RESULTS
                 except (ImportError, AttributeError) as e:
                     logger.warning(f"Could not get config.TOP_N_RESULTS ({e}), using default {top_n_val}.")
@@ -355,12 +373,63 @@ with tab_rec:
                     general_mode,
                     concise_mode,
                     answer_placeholder,
-                    project_modules_loaded # Pass the flag
+                    project_modules_loaded
                 ))
             except Exception as e:
                 st.error(f"Error running async recommendation task: {e}", icon="❌")
                 logger.error(f"Async recommendation task runner error: {e}", exc_info=True)
                 if answer_placeholder: answer_placeholder.empty()
+
+    # --- Display Results Section (WITH DEBUGGING from previous step) ---
+    if st.session_state.get("llm_answer"):
+        st.markdown("---")
+        st.markdown("### 🎯 Recommendation Result")
+
+        # Display the main answer (current method)
+        st.markdown("**Answer (formatted via st.markdown):**")
+        st.markdown(st.session_state.llm_answer, unsafe_allow_html=True)
+
+        # --- DEBUGGING LINES (kept from previous modification) ---
+        st.markdown("---")
+        st.markdown("**DEBUG: Answer (displayed as raw text via st.text):**")
+        st.text(st.session_state.llm_answer)
+
+        st.markdown("---")
+        st.markdown("**DEBUG: Answer (displayed in a code block via st.code):**")
+        st.code(str(st.session_state.llm_answer), language=None)
+        # --- END DEBUGGING LINES ---
+
+        # Display context sources if available
+        if st.session_state.get("context_sources"):
+            with st.expander(f"📚 Retrieved Context ({len(st.session_state.context_sources)} sources)", expanded=False):
+                for i, source in enumerate(st.session_state.context_sources, 1):
+                    st.markdown(f"**Source {i}:**")
+                    if isinstance(source, dict):
+                        # If source is a dict with metadata
+                        if 'content' in source:
+                            st.text(source['content'][:500] + "..." if len(source['content']) > 500 else source['content'])
+                        if 'metadata' in source and source['metadata']:
+                            metadata = source['metadata']
+                            st.caption(f"📄 {metadata.get('title', 'Unknown')} | Page: {metadata.get('page', 'N/A')}")
+                    else:
+                        # If source is just text
+                        st.text(str(source)[:500] + "..." if len(str(source)) > 500 else str(source))
+                    st.markdown("---")
+
+        # Display raw context chunks if available (for debugging)
+        if st.session_state.get("raw_context_chunks") and st.checkbox("🔍 Show Raw Context Chunks (Debug)", value=False):
+            with st.expander("Raw Context Data", expanded=False):
+                for i, chunk in enumerate(st.session_state.raw_context_chunks, 1):
+                    st.markdown(f"**Chunk {i}:**")
+                    st.json(chunk if isinstance(chunk, dict) else {"content": str(chunk)})
+
+        # Option to clear results
+        if st.button("🗑️ Clear Results", key="clear_rec_results"):
+            st.session_state.llm_answer = None
+            st.session_state.context_sources = []
+            st.session_state.raw_context_chunks = []
+            st.rerun()
+
 # --- End Recommendation Tab ---
 
 
@@ -390,7 +459,7 @@ with tab_how:
         * **Smart Ranking (RRF):** Results are combined using Reciprocal Rank Fusion (RRF) for a balanced relevance ranking.
         """)
         st.subheader("4️⃣ LLM Generation")
-        llm_provider_display = "a Large Language Model (LLM)" 
+        llm_provider_display = "a Large Language Model (LLM)"
         if project_modules_loaded and config and hasattr(config, 'LLM_PROVIDER_ORDER') and config.LLM_PROVIDER_ORDER:
             llm_provider_display = config.LLM_PROVIDER_ORDER[0].capitalize()
             if len(config.LLM_PROVIDER_ORDER) > 1:
@@ -433,7 +502,7 @@ with tab_about:
         * **Hybrid Search:** Combines semantic (vector) and keyword (BM25) search with RRF.
         * **LLM Integration:** Uses Gemini/Groq for generation (Strict/Hybrid modes) with fallback.
         * **UI:** Interactive Streamlit interface for querying, data fetching, and arXiv search.
-        """) 
+        """)
     with col2_about:
         st.subheader("🚀 Future Work & Ideas")
         st.markdown("""
@@ -524,78 +593,45 @@ with tab_fetch:
             with st.spinner("Fetching and processing data... This may take a while."):
                 try:
                     from scripts.cli import setup_data_and_fetch as cli_setup_data_and_fetch
-                    from hybrid_search_rag import config 
+                    from hybrid_search_rag import config
 
                     fetch_args_list = []
                     if use_suggestions:
                         fetch_args_list.extend(["--suggest-sources", "-t", st.session_state.fetch_topic_for_suggestion])
-                        fetch_args_list.extend(["--num-arxiv", str(st.session_state.fetch_num_arxiv)]) 
+                        fetch_args_list.extend(["--num-arxiv", str(st.session_state.fetch_num_arxiv)])
                     else:
                         if st.session_state.fetch_arxiv_query and st.session_state.fetch_num_arxiv > 0:
                             fetch_args_list.extend(["--arxiv-query", st.session_state.fetch_arxiv_query, "--num-arxiv", str(st.session_state.fetch_num_arxiv)])
                         else:
                             fetch_args_list.extend(["--arxiv-query", "dummy_query_to_satisfy_parser", "--num-arxiv", "0"])
-                    
-                    # --- MODIFICATION for single URL fetch ---
-                    # The cli.py setup_data_and_fetch expects target_urls to be derived from config or LLM.
-                    # We'll directly call crawl_and_fetch_web_articles if a single URL is given,
-                    # and then combine it with any arXiv results.
-                    # This bypasses the argparse logic in cli.py for the web URL part for simplicity here.
 
-                    # Create a mock args namespace just for arXiv fetching part of cli_setup_data_and_fetch
-                    # We will handle the single web URL separately if provided.
-                    temp_parser = argparse.ArgumentParser()
-                    temp_parser.add_argument("--arxiv-query", type=str, default="")
-                    temp_parser.add_argument("--num-arxiv", type=int, default=0)
-                    temp_parser.add_argument("--suggest-sources", action="store_true")
-                    temp_parser.add_argument("-t", "--topic", type=str, default="")
-                    temp_parser.add_argument("--debug", action="store_true", default=False) # Add debug
-                    temp_parser.add_argument("--num-web-pages", type=int, default=config.MAX_PAGES_TO_CRAWL) # Add num_web_pages
-
-
-                    # If a single web URL is provided, we will fetch it separately
-                    # and then pass its results to a modified processing step.
-                    # For now, let's assume cli_setup_data_and_fetch handles arXiv
-                    # and we'll manually trigger the web crawl if web_url_fetch is set.
-
-                    # This part becomes complex because cli_setup_data_and_fetch is designed to do everything.
-                    # A cleaner approach would be to refactor cli.py to have separate functions for
-                    # arXiv fetching, web fetching, and then processing.
-                    # Given the current structure, the most direct way is to call cli_setup_data_and_fetch
-                    # and if a single web URL is given, ensure TARGET_WEB_URLS in config is temporarily set or
-                    # modify cli_setup_data_and_fetch to accept a direct list of URLs.
-
-                    # For this fix, let's assume the user wants to use the *existing* `cli_setup_data_and_fetch`
-                    # which means if they provide a single URL, it's more of an instruction to *include* it
-                    # if web crawling is generally active (e.g. via config or LLM suggestion).
-                    # The current `cli_setup_data_and_fetch` doesn't take a direct URL list argument.
-                    # So, the single URL input in UI is more of a "wish" that needs backend adjustment
-                    # or relies on `config.TARGET_WEB_URLS` being updated or LLM suggesting it.
-
-                    # The simplest way to make the single URL work *with the current cli.py* is to
-                    # temporarily modify config.TARGET_WEB_URLS if a single URL is provided. This is a hack.
-                    
                     original_target_urls = None
                     if web_url_fetch and web_url_fetch.strip():
                         logger.info(f"Single web URL provided: {web_url_fetch}. Will attempt to include it.")
-                        # Hacky: Temporarily modify config for this run
                         if hasattr(config, 'TARGET_WEB_URLS'):
-                            original_target_urls = list(config.TARGET_WEB_URLS) # Backup
+                            original_target_urls = list(config.TARGET_WEB_URLS)
                             config.TARGET_WEB_URLS = [web_url_fetch.strip()] + original_target_urls
                         else:
                             config.TARGET_WEB_URLS = [web_url_fetch.strip()]
-                        # If using LLM suggestions, the LLM might also suggest URLs. This single URL will be added.
-                        # If not using LLM suggestions, and no arXiv query, this will be the only source.
                         if not use_suggestions and not (st.session_state.fetch_arxiv_query and st.session_state.fetch_num_arxiv > 0):
                              logger.info("Only single web URL provided. Setting num_arxiv to 0 to focus on web.")
                              fetch_args_list = ["--arxiv-query", "dummy_for_parser", "--num-arxiv", "0"]
 
 
+                    temp_parser = argparse.ArgumentParser()
+                    temp_parser.add_argument("--arxiv-query", type=str, default="")
+                    temp_parser.add_argument("--num-arxiv", type=int, default=0)
+                    temp_parser.add_argument("--suggest-sources", action="store_true")
+                    temp_parser.add_argument("-t", "--topic", type=str, default="")
+                    temp_parser.add_argument("--debug", action="store_true", default=False)
+                    temp_parser.add_argument("--num-web-pages", type=int, default=config.MAX_PAGES_TO_CRAWL if config else 5)
+
+
                     fetch_args_parsed = temp_parser.parse_args(fetch_args_list)
-                    
+
                     status_message = asyncio.run(cli_setup_data_and_fetch(fetch_args_parsed))
 
-                    if original_target_urls is not None and hasattr(config, 'TARGET_WEB_URLS'): # Restore config
+                    if original_target_urls is not None and hasattr(config, 'TARGET_WEB_URLS'):
                         config.TARGET_WEB_URLS = original_target_urls
 
 
@@ -629,16 +665,16 @@ with tab_arxiv:
     if 'arxiv_query_direct' not in st.session_state: st.session_state.arxiv_query_direct = "quantum machine learning"
     if 'arxiv_num_results_direct' not in st.session_state: st.session_state.arxiv_num_results_direct = 5
 
-    arxiv_query_direct_val = st.text_input( # Renamed variable to avoid conflict
+    arxiv_query_direct_val = st.text_input(
         "arXiv Search Query:",
         value=st.session_state.arxiv_query_direct,
-        key="arxiv_direct_query_input_key", # Ensure key is unique
+        key="arxiv_direct_query_input_key",
         help="Enter your search terms (e.g., 'cs.CV AND object detection')"
     )
-    num_results_direct_val = st.number_input( # Renamed variable
+    num_results_direct_val = st.number_input(
         "Max Results:",
         min_value=1, max_value=50, value=st.session_state.arxiv_num_results_direct, step=1,
-        key="arxiv_direct_num_input_key" # Ensure key is unique
+        key="arxiv_direct_num_input_key"
     )
 
     submit_arxiv_search = st.button("Search arXiv", type="primary", disabled=not project_modules_loaded or not arxiv_query_direct_val)
@@ -653,17 +689,34 @@ with tab_arxiv:
             with st.spinner("Searching arXiv..."):
                 try:
                     from scripts.cli import run_arxiv_search as cli_run_arxiv_search
-                    results = cli_run_arxiv_search(arxiv_query_direct_val, num_results_direct_val) 
+                    results = cli_run_arxiv_search(arxiv_query_direct_val, num_results_direct_val)
 
                     if results:
                         st.success(f"Found {len(results)} results on arXiv:")
                         for paper in results:
-                            st.markdown(f"**[{paper.get('title', 'N/A')}]({paper.get('url', '#')})**")
+                            title = paper.get('title', 'N/A')
+                            url = paper.get('url', '#')
+                            pdf_url = paper.get('pdf_url', '#')
+
+                            display_title = title
+                            if url != '#':
+                                display_title = f"[{title}]({url})"
+                            if pdf_url != '#' and pdf_url != url:
+                                display_title += f" ([PDF]({pdf_url}))"
+
+                            st.markdown(f"**{display_title}**", unsafe_allow_html=True)
+
                             authors = paper.get('authors', [])
                             if authors:
                                 st.markdown(f"*Authors: {', '.join(authors)}*")
-                            st.caption(f"Published: {paper.get('published_date', 'N/A')} | ID: {paper.get('entry_id', 'N/A')}")
-                            st.markdown(f"<details><summary>Abstract</summary>{paper.get('summary', 'No abstract available.')}</details>", unsafe_allow_html=True)
+
+                            published_date = paper.get('published_date', 'N/A')
+                            entry_id = paper.get('entry_id') or paper.get('arxiv_entry_id', 'N/A')
+                            st.caption(f"Published: {published_date} | ID: {entry_id}")
+
+                            summary = paper.get('summary', 'No abstract available.')
+                            with st.expander("Abstract"):
+                                st.markdown(summary, unsafe_allow_html=True)
                             st.markdown("---")
                     else:
                         st.info("No results found for your query on arXiv.")
@@ -708,4 +761,3 @@ st.markdown(
     unsafe_allow_html=True
 )
 # --- End Footer ---
-

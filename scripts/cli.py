@@ -707,40 +707,50 @@ async def main_cli(): # Renamed to avoid conflict with main function in app.py
         try:
             if loaded_recommender is None: load_components()
         except RuntimeError as e:
+            # Keep this error print as it's a CLI operational error
             print(f"Error loading components for recommendation: {e}", file=sys.stderr)
             sys.exit(1)
 
-        print(f"Processing query: '{args.query}' (General: {args.general}, Concise: {args.concise}, Stream: {args.stream})")
+        # Comment out or remove print statements related to displaying results in the CLI
+        # print(f"Processing query: '{args.query}' (General: {args.general}, Concise: {args.concise}, Stream: {args.stream})")
+        logger.info(f"CLI: Processing query: '{args.query}' (General: {args.general}, Concise: {args.concise}, Stream: {args.stream})") # Log instead of printing
+        
         response_gen, sources, _ = await run_recommendation(args.query, args.num_results, args.general, args.concise)
         
-        full_response_parts = []
+        # full_response_parts = [] # Not needed if not printing
         if args.stream:
-            print("\nLLM Response (Streaming):")
+            # print("\\nLLM Response (Streaming):")
             try:
                 for chunk in response_gen:
-                    print(chunk, end="", flush=True)
-                    full_response_parts.append(chunk)
-                print() 
+                    # print(chunk, end="", flush=True) # Suppress terminal output
+                    # full_response_parts.append(chunk) # Not needed
+                    pass # Consume the generator
+                # print() 
             except Exception as e:
-                print(f"\nError during streaming: {e}")
+                # Keep this error print as it's a CLI operational error
+                print(f"\\nError during streaming: {e}", file=sys.stderr) # Changed to sys.stderr
                 logger.error(f"Error streaming LLM response: {e}", exc_info=True)
         else:
-            print("\nLLM Response (Collected):")
+            # print("\\nLLM Response (Collected):")
             try:
                 collected_response = "".join(list(response_gen))
-                print(collected_response)
-                full_response_parts.append(collected_response)
+                # print(collected_response) # Suppress terminal output
+                # full_response_parts.append(collected_response) # Not needed
+                pass # Consume the generator
             except Exception as e:
-                print(f"\nError collecting non-streamed response: {e}")
+                # Keep this error print as it's a CLI operational error
+                print(f"\\nError collecting non-streamed response: {e}", file=sys.stderr) # Changed to sys.stderr
                 logger.error(f"Error collecting LLM response: {e}", exc_info=True)
         
-        print("\n--- Sources ---")
-        if sources:
-            for i, source_info in enumerate(sources):
-                print(f"{i+1}. {source_info}")
-        else:
-            print("No sources were provided with the response.")
-        print("---------------")
+        # print("\\n--- Sources ---")
+        # if sources:
+        #     for i, source_info in enumerate(sources):
+        #         print(f"{i+1}. {source_info}")
+        # else:
+        #     print("No sources were provided with the response.")
+        # print("---------------")
+        logger.info("CLI: Recommendation processing complete. Results are intended for UI display.")
+
 
     elif args.command == "find_arxiv":
         results = run_arxiv_search(args.query, args.num_results)

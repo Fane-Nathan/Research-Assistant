@@ -401,15 +401,14 @@ class HybridRecommender:
             if 0 <= doc_index < num_docs_in_corpus: # Use num_docs_in_corpus consistently
                 metadata_item = resource_metadata[doc_index]
                 
-                # CRITICAL CHECK: Ensure 'entry_id' key exists in the metadata item
-                # Changed 'id' to 'entry_id'
-                if 'entry_id' not in metadata_item:
-                    logger.error(f"Document at index {doc_index} in resource_metadata is missing an \\'entry_id\\' key. Metadata: {metadata_item}. Skipping this item.")
+                # CRITICAL CHECK: Ensure either 'entry_id' or 'arxiv_entry_id' key exists in the metadata item
+                # Handle both 'entry_id' and 'arxiv_entry_id' for backward compatibility
+                if 'entry_id' not in metadata_item and 'arxiv_entry_id' not in metadata_item:
+                    logger.error(f"Document at index {doc_index} in resource_metadata is missing both \\'entry_id\\' and \\'arxiv_entry_id\\' keys. Metadata: {metadata_item}. Skipping this item.")
                     continue # Skip this item as it cannot be processed correctly downstream
 
-                # Use .get('entry_id', f"[No ID at index {doc_index}]") for safer access in logging
-                # Changed 'id' to 'entry_id'
-                doc_id_for_log = metadata_item.get('entry_id', f"[No entry_id at index {doc_index}]")
+                # Use entry_id if available, otherwise fall back to arxiv_entry_id
+                doc_id_for_log = metadata_item.get('entry_id') or metadata_item.get('arxiv_entry_id', f"[No ID at index {doc_index}]")
                 title_for_log = metadata_item.get('title', f"[No Title - ID: {doc_id_for_log}]")
                 logger.debug(f"  Considering doc index {doc_index} (ID: {doc_id_for_log}, Title: \'{title_for_log}\') with RRF score {score:.4f}")
                 final_recommendations.append((metadata_item, score))
