@@ -12,8 +12,9 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 try:
-    # Import the main function and config (or its fallback if config.py is not found by data_manager.py)
-    from hybrid_search_rag.data_handling import combine_and_deduplicate_datasets, config as dm_config
+    # Import the main function and config 
+    from hybrid_search_rag.data_handling import combine_and_deduplicate_datasets
+    from hybrid_search_rag import config as dm_config
 except ImportError as e:
     print(f"Error importing from hybrid_search_rag.data_manager: {e}", file=sys.stderr)
     print("Please ensure that the project root is correctly added to PYTHONPATH or sys.path,", file=sys.stderr)
@@ -57,7 +58,8 @@ logger.addHandler(console_handler)
 logger.propagate = False
 # --- End Logger Setup ---
 
-if __name__ == "__main__":
+def main():
+    """Main function to run the dataset combination process."""
     print("--- Starting Dataset Combination Script (using centralized function) ---")
     logger.info("Starting dataset combination using centralized combine_and_deduplicate_datasets function.")
 
@@ -105,15 +107,18 @@ if __name__ == "__main__":
         
         final_output_file_path = os.path.join(output_directory_for_combined_data, f"final_{COMBINED_OUTPUT_BASENAME}")
         logger.info(f"Combination complete. Main unique dataset expected at: {final_output_file_path}")
-        print(f"\\nCombination complete. Main unique dataset expected at: {final_output_file_path}")
+        print(f"\nCombination complete. Main unique dataset expected at: {final_output_file_path}")
         print(f"Check the log file for details: {log_file_path}")
 
     except FileNotFoundError as e:
         logger.error(f"File not found during combination: {e}", exc_info=True)
-        print(f"\\nError: A required file was not found: {e}", file=sys.stderr)
+        print(f"\nError: A required file was not found: {e}", file=sys.stderr)
     except Exception as e:
         logger.error(f"An unexpected error occurred during the combination process: {e}", exc_info=True)
-        print(f"\\nAn unexpected error occurred: {e}", file=sys.stderr)
+        print(f"\nAn unexpected error occurred: {e}", file=sys.stderr)
         print(f"Check the log file for details: {log_file_path}")
 
     print("--- Script Finished ---")
+
+if __name__ == "__main__":
+    main()

@@ -173,7 +173,7 @@ loaded_bm25_index: Optional[BM25Okapi] = None
 loaded_recommender: Optional[HybridRecommender] = None
 
 # --- Component Loading ---
-async def load_components(force_reload: bool = False): # Made async
+def load_components(force_reload: bool = False): # Made sync - no async operations needed
     global loaded_metadata, loaded_embeddings, loaded_bm25_index, loaded_recommender
     if force_reload or loaded_metadata is None or loaded_recommender is None:
         logger.info(f"{'Forcing reload' if force_reload else 'Loading core components'}...")
@@ -367,7 +367,7 @@ Provide *only* the queries and URLs in the specified format.'''
     try: # Saving Data
         manager.save_all_data(all_chunk_metadata, embeddings, bm25_index)
         logger.info("Processed data saved successfully.")
-        await load_components(force_reload=True) # Reload components with new data, await async load_components
+        load_components(force_reload=True) # Reload components with new data
         success_msg = f"Success: Fetched {num_docs_fetched} docs, generated {num_chunks} chunks. Saved metadata"
         if embed_success: success_msg += ", embeddings"
         if bm25_success: success_msg += ", BM25 index"
@@ -413,7 +413,7 @@ async def run_recommendation(query: str, num_final_results: int, general_mode: b
         # 1. Load Components
         if loaded_recommender is None or loaded_metadata is None:
              logger.info("Components not loaded, attempting load...")
-             await load_components() # await async call
+             load_components() # synchronous call
         if loaded_recommender is None or loaded_metadata is None:
              raise RuntimeError("Core components failed to load. Run 'fetch' command first.")
 
@@ -647,7 +647,7 @@ async def main(): # Make main async
             # For safety, ensure components are loaded if recommender is still None.
             if loaded_recommender is None:
                  logger.info("Ensuring components are loaded after fetch for query execution...")
-                 await load_components() # Ensured await
+                 load_components() # synchronous call
         except RuntimeError as e:
             print(f"Error loading components after fetch: {e}", file=sys.stderr)
             sys.exit(1)
@@ -655,7 +655,7 @@ async def main(): # Make main async
     elif args.rebuild_index:
         print("Rebuilding index and embeddings from existing data...")
         try:
-            await load_components(force_reload=False) # Load existing metadata first
+            load_components(force_reload=False) # Load existing metadata first
             if loaded_metadata:
                 data_manager = DataManager(config.DATA_DIR, config.METADATA_FILE, config.EMBEDDINGS_FILE, config.BM25_INDEX_FILE)
                 embedder = EmbeddingModel(config.EMBEDDING_MODEL_NAME)
@@ -691,7 +691,7 @@ async def main(): # Make main async
                         logger.error(f"BM25 index rebuilding failed: {e}", exc_info=True)
 
                     data_manager.save_all_data(loaded_metadata, embeddings, bm25_index) # Save potentially new embeddings/index
-                    await load_components(force_reload=True) # Reload all components
+                    load_components(force_reload=True) # Reload all components
                     print(f"Rebuild complete. Embeddings updated: {embed_success}. BM25 index updated: {bm25_success}.")
             else:
                 print("No metadata loaded. Cannot rebuild. Run --fetch first.")
@@ -707,7 +707,7 @@ async def main(): # Make main async
     if loaded_recommender is None: # Check if components were loaded by fetch/rebuild
         try:
             logger.info("Loading components for query/interactive mode...")
-            await load_components() # await async call
+            load_components() # synchronous call
         except RuntimeError as e:
             print(f"Critical Error: Failed to load necessary components: {e}", file=sys.stderr)
             print("Try running with --fetch to (re)generate data or check data file paths.", file=sys.stderr)

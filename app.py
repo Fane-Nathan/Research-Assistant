@@ -64,9 +64,15 @@ logger.info(f"Project Root added to sys.path: {project_root}")
 logger.info("Attempting project module imports...")
 project_modules_loaded = False
 # highlighting_available = False # Flag removed as feature is removed
+
+# Initialize default values for variables that might not be imported
+config = None
+check_nltk_data = None
+load_components = None
+
 try:
     from hybrid_search_rag import config
-    from scripts.interfaces.cli import ( # MODIFIED: Path updated
+    from scripts.cli import ( # MODIFIED: Path updated
         load_components,
         run_recommendation, 
         setup_data_and_fetch,
@@ -108,7 +114,7 @@ async def handle_recommendation_submission_async(query: str, top_n: int, general
 
     # Ensure cli_run_recommendation is available
     try:
-        from scripts.interfaces.cli import run_recommendation as cli_run_recommendation
+        from scripts.cli import run_recommendation as cli_run_recommendation
         from hybrid_search_rag import config # Ensure config is in scope here if needed for TOP_N_RESULTS
     except ImportError:
         st.error("Failed to import recommendation function or config. Cannot proceed.")
@@ -125,7 +131,7 @@ async def handle_recommendation_submission_async(query: str, top_n: int, general
 
         full_response_list = []
         error_in_stream = False
-        async for chunk in response_generator: # MODIFIED: Use async for
+        for chunk in response_generator: # FIXED: Use regular for loop since generator is not async
             if isinstance(chunk, str) and chunk.startswith("[Error:"):
                 st.error(f"LLM Error: {chunk}", icon="❌")
                 logger.error(f"LLM generation failed: {chunk}")
@@ -157,7 +163,7 @@ async def handle_recommendation_submission_async(query: str, top_n: int, general
 
 # --- NLTK Data Download Logic ---
 # Reuse the NLTK check function from cli.py if modules loaded
-if project_modules_loaded:
+if project_modules_loaded and check_nltk_data:
     try:
         if 'nltk_data_checked_app' not in st.session_state:
              with st.spinner("Checking NLTK data..."):
@@ -203,7 +209,7 @@ st.divider()
 
 # --- Caching Components ---
 @st.cache_resource
-async def cached_load_components(): # MODIFIED: Made async
+def cached_load_components(): # MODIFIED: Made synchronous
     """
     Loads core RAG components using the imported 'load_components' function.
     Uses session state to force reload after data updates.
@@ -223,12 +229,19 @@ async def cached_load_components(): # MODIFIED: Made async
 
     try:
         # Ensure NLTK is checked before loading components
-        check_nltk_data()
-        # --- FIXED: Pass the force_reload_flag to load_components ---\n        await load_components(force_reload=force_reload_flag) # MODIFIED: Added await
-        # --- End Fix ---
+        if check_nltk_data:
+            check_nltk_data()
+        
+        # Check if load_components is available
+        if load_components is None:
+            logger.error("load_components function not available - project modules failed to import")
+            return False, "load_components function not available"
+            
+        # Call the now-synchronous load_components function
+        load_components(force_reload=force_reload_flag)
 
         # Check if the recommender object exists in cli.py after loading
-        from scripts.interfaces.cli import loaded_recommender # MODIFIED: Path updated
+        from scripts.cli import loaded_recommender # MODIFIED: Path updated
         if loaded_recommender is not None:
              logger.info("Component loading logic successful (based on \'loaded_recommender\' indicator).")
              return True, None
@@ -252,14 +265,12 @@ async def cached_load_components(): # MODIFIED: Made async
 logger.info("Attempting initial component load via cached function...")
 components_loaded_status, load_error_message = False, "Project modules did not load."
 if project_modules_loaded:
-    # components_loaded_status, load_error_message = cached_load_components() # OLD SYNCHRONOUS CALL
-    # MODIFIED: Run async function using asyncio.run() for initial load
     try:
-        components_loaded_status, load_error_message = asyncio.run(cached_load_components())
+        components_loaded_status, load_error_message = cached_load_components()
     except Exception as e:
         logger.error(f"Error running cached_load_components during initial setup: {e}")
         components_loaded_status = False
-        load_error_message = f"Async load error: {e}"
+        load_error_message = f"Load error: {e}"
 
 logger.info(f"Components loaded status: {components_loaded_status}")
 if not components_loaded_status and project_modules_loaded:
@@ -289,7 +300,7 @@ with tab_rec:
     col1_rec, col2_rec = st.columns([3, 1])
 
     with col1_rec:
-        default_query = config.DEFAULT_QUERY if project_modules_loaded else "Example: Explain Retrieval-Augmented Generation (RAG)."
+        default_query = config.DEFAULT_QUERY if project_modules_loaded and config and hasattr(config, 'DEFAULT_QUERY') else "Example: Explain Retrieval-Augmented Generation (RAG)."
         query = st.text_area(
             "Your Question:",
             value=st.session_state.get("rec_query", default_query),
@@ -378,7 +389,7 @@ with tab_how:
         * **Chunking:** Breaks down documents into smaller pieces.
         """)
         st.subheader("2️⃣ Hybrid Indexing")
-        emb_model = f"`{config.EMBEDDING_MODEL_NAME}`" if project_modules_loaded else "a sentence transformer model"
+        emb_model = f"`{config.EMBEDDING_MODEL_NAME}`" if project_modules_loaded and config and hasattr(config, 'EMBEDDING_MODEL_NAME') else "a sentence transformer model"
         st.markdown(f"""
         * **Vector Embeddings:** Creates numerical representations (vectors) capturing semantic meaning using {emb_model}.
         * **Keyword Index (BM25):** Creates a traditional keyword index for term matches.
@@ -393,7 +404,7 @@ with tab_how:
         st.subheader("4️⃣ LLM Generation")
         # --- FIXED: Use new config structure ---
         llm_provider_display = "a Large Language Model (LLM)" # Default
-        if project_modules_loaded and config.LLM_PROVIDER_ORDER:
+        if project_modules_loaded and config and hasattr(config, 'LLM_PROVIDER_ORDER') and config.LLM_PROVIDER_ORDER:
             # Display the primary provider (first in the list)
             llm_provider_display = config.LLM_PROVIDER_ORDER[0].capitalize()
             if len(config.LLM_PROVIDER_ORDER) > 1:
@@ -531,7 +542,7 @@ with tab_fetch:
         else:
             with st.spinner("Fetching and processing data... This may take a while."):
                 try:
-                    from scripts.interfaces.cli import setup_data_and_fetch as cli_setup_data_and_fetch
+                    from scripts.cli import setup_data_and_fetch as cli_setup_data_and_fetch
                     from hybrid_search_rag import config # Ensure config is available
 
                     # Create a mock args namespace for setup_data_and_fetch
@@ -579,16 +590,15 @@ with tab_fetch:
                     # Force reload of components after data update
                     st.session_state.force_component_reload = True
                     # Rerun cached_load_components to reflect new data
-                    # components_loaded_status, load_error_message = cached_load_components() # OLD
                     try:
-                        components_loaded_status, load_error_message = asyncio.run(cached_load_components())
+                        components_loaded_status, load_error_message = cached_load_components()
                         if components_loaded_status:
                             st.toast("RAG Components reloaded with new data.", icon="🔄")
                         else:
                             st.error(f"Failed to reload RAG components after data fetch: {load_error_message}")
                     except Exception as reload_e:
                         st.error(f"Error reloading components: {reload_e}")
-                        logger.error(f"Async component reload error: {reload_e}", exc_info=True)
+                        logger.error(f"Component reload error: {reload_e}", exc_info=True)
 
                 except ImportError:
                     st.error("Failed to import data fetching function. Cannot proceed.")
@@ -631,9 +641,9 @@ with tab_arxiv:
             logger.info(f"Performing direct arXiv search for: '{arxiv_query}', num_results={num_results}")
             with st.spinner("Searching arXiv..."):
                 try:
-                    from scripts.interfaces.cli import run_arxiv_search as cli_run_arxiv_search
-                    # results = cli_run_arxiv_search(arxiv_query, num_results) # OLD SYNCHRONOUS CALL
-                    results = asyncio.run(cli_run_arxiv_search(arxiv_query, num_results)) # MODIFIED: Use asyncio.run
+                    from scripts.cli import run_arxiv_search as cli_run_arxiv_search
+                    # Direct arXiv search using the imported function
+                    results = cli_run_arxiv_search(arxiv_query, num_results) # FIXED: Removed asyncio.run since function is not async
 
                     if results:
                         st.success(f"Found {len(results)} results on arXiv:")
@@ -666,7 +676,7 @@ with tab_feedback:
     """)
     TALLY_ORIGINAL_EMBED_URL = "https://tally.so/embed/n0kkp6?alignLeft=1&hideTitle=1&transparentBackground=1&dynamicHeight=1"
     IFRAME_HEIGHT = 500
-    logger.info(f"Embedding feedback form from TALLY_ORIGINAL_EMBED_URL}")
+    logger.info(f"Embedding feedback form from {TALLY_ORIGINAL_EMBED_URL}")
     try:
         components.iframe(TALLY_ORIGINAL_EMBED_URL, height=IFRAME_HEIGHT, scrolling=True)
         st.caption("Feedback form securely hosted by Tally.so.")

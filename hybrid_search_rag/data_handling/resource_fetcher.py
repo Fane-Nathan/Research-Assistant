@@ -16,6 +16,7 @@ import re
 import sys
 import time
 from collections import deque
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple, Set, Type, Union # Added Union
 from urllib.parse import urljoin, urlparse, urlunparse
 
@@ -1078,4 +1079,181 @@ async def fetch_arxiv_papers(
         if page:
             await page.close()
         return None
+    
+    # Main arXiv API fetching logic
+    base_url = "http://export.arxiv.org/api/query"
+    if verbose:
+        logger.info(f"🔄 ArXiv Fetch: Starting fetch for query='{query}', max_results={max_results}")
+    
+    # Build query parameters
+    search_query = query
+    if days_back is not None:
+        try:
+            cutoff_date = datetime.now() - timedelta(days=days_back)
+            date_filter = cutoff_date.strftime('%Y%m%d%H%M%S')
+            search_query += f" AND submittedDate:[{date_filter}* TO *]"
+            if verbose:
+                logger.info(f"📅 ArXiv Fetch: Added date filter for last {days_back} days")
+        except Exception as date_e:
+            logger.warning(f"Failed to add date filter: {date_e}")
+    
+    # Set sort order
+    sort_order = "relevance" if sort_by == "relevance" else "lastUpdatedDate"
+    
+    params = {
+        'search_query': search_query,
+        'start': 0,
+        'max_results': max_results,
+        'sortBy': sort_order,
+        'sortOrder': 'descending'
+    }
+    
+    # Create session if not provided
+    session_created = False
+    if session is None:
+        connector = None
+        if proxy:
+            connector = aiohttp.TCPConnector()
+        session = aiohttp.ClientSession(
+            connector=connector,
+            timeout=aiohttp.ClientTimeout(total=180, connect=30, sock_read=60)  # Increased timeout: 3 minutes total, 30s connect, 60s read
+        )
+        session_created = True
+    
+    papers_list = []
+    
+    try:
+        if verbose:
+            logger.info(f"🌐 ArXiv Fetch: Making API request to {base_url}")
+        
+        kwargs = {}
+        if proxy:
+            kwargs['proxy'] = proxy
+        
+        async with session.get(base_url, params=params, **kwargs) as response:
+            if response.status == 200:
+                xml_content = await response.text()
+                if verbose:
+                    logger.info(f"✅ ArXiv Fetch: Got API response ({len(xml_content)} chars)")
+                
+                # Parse XML response
+                try:
+                    root = ET.fromstring(xml_content)
+                    
+                    # Find all entry elements
+                    entries = root.findall('.//{http://www.w3.org/2005/Atom}entry')
+                    if verbose:
+                        logger.info(f"📄 ArXiv Fetch: Found {len(entries)} entries in XML")
+                    
+                    for entry in entries:
+                        try:
+                            # Extract basic metadata
+                            title_elem = entry.find('.//{http://www.w3.org/2005/Atom}title')
+                            title = title_elem.text.strip() if title_elem is not None else "N/A"
+                            
+                            summary_elem = entry.find('.//{http://www.w3.org/2005/Atom}summary')
+                            summary = summary_elem.text.strip() if summary_elem is not None else ""
+                            
+                            # Extract published date
+                            published_elem = entry.find('.//{http://www.w3.org/2005/Atom}published')
+                            published = published_elem.text.strip() if published_elem is not None else ""
+                            
+                            # Extract updated date
+                            updated_elem = entry.find('.//{http://www.w3.org/2005/Atom}updated')
+                            updated = updated_elem.text.strip() if updated_elem is not None else ""
+                            
+                            # Extract arXiv ID from the entry ID
+                            id_elem = entry.find('.//{http://www.w3.org/2005/Atom}id')
+                            entry_id = ""
+                            pdf_url = ""
+                            if id_elem is not None:
+                                entry_id = id_elem.text.strip()
+                                # Extract arXiv ID from URL like http://arxiv.org/abs/1234.5678v1
+                                arxiv_id = entry_id.split('/')[-1] if '/' in entry_id else entry_id
+                                pdf_url = f"http://arxiv.org/pdf/{arxiv_id}.pdf"
+                            
+                            # Extract authors
+                            authors = []
+                            author_elems = entry.findall('.//{http://www.w3.org/2005/Atom}author')
+                            for author_elem in author_elems:
+                                name_elem = author_elem.find('.//{http://www.w3.org/2005/Atom}name')
+                                if name_elem is not None:
+                                    authors.append(name_elem.text.strip())
+                            
+                            # Extract categories
+                            categories = []
+                            category_elems = entry.findall('.//{http://www.w3.org/2005/Atom}category')
+                            for cat_elem in category_elems:
+                                term = cat_elem.get('term')
+                                if term:
+                                    categories.append(term)
+                            
+                            # Build paper metadata
+                            paper_data = {
+                                'title': title,
+                                'authors': authors,
+                                'published': published.split('T')[0] if 'T' in published else published,  # Keep date only
+                                'updated': updated.split('T')[0] if 'T' in updated else updated,
+                                'entry_id': entry_id,
+                                'pdf_url': pdf_url,
+                                'url': entry_id,  # For compatibility
+                                'summary': summary.replace('\n', ' ').strip(),
+                                'categories': categories,
+                                'source': 'arxiv'
+                            }
+                            
+                            # Fetch PDF content if requested
+                            content = ""
+                            if fetch_pdfs and pdf_url and playwright_context:
+                                if verbose:
+                                    logger.info(f"📄 ArXiv Fetch: Attempting PDF fetch for {title[:50]}...")
+                                
+                                try:
+                                    pdf_content = await _fetch_pdf_content_with_playwright(pdf_url, playwright_context)
+                                    if pdf_content:
+                                        content = pdf_content
+                                        if verbose:
+                                            logger.info(f"✅ ArXiv Fetch: PDF content extracted ({len(content)} chars)")
+                                    else:
+                                        if verbose:
+                                            logger.warning(f"⚠️ ArXiv Fetch: PDF content extraction failed for {title[:50]}")
+                                except Exception as pdf_e:
+                                    logger.warning(f"PDF fetch failed for {title}: {pdf_e}")
+                                    if verbose:
+                                        logger.warning(f"⚠️ ArXiv Fetch: PDF error for {title[:50]}: {str(pdf_e)}")
+                            
+                            paper_data['content'] = content
+                            papers_list.append(paper_data)
+                            
+                        except Exception as entry_e:
+                            logger.warning(f"Failed to parse arXiv entry: {entry_e}")
+                            continue
+                    
+                    if verbose:
+                        logger.info(f"✅ ArXiv Fetch: Successfully processed {len(papers_list)} papers")
+                
+                except ET.ParseError as parse_e:
+                    logger.error(f"Failed to parse arXiv XML response: {parse_e}")
+                    if verbose:
+                        logger.error(f"❌ ArXiv Fetch: XML parsing failed: {str(parse_e)}")
+                
+            else:
+                logger.error(f"arXiv API request failed with status {response.status}")
+                if verbose:
+                    logger.error(f"❌ ArXiv Fetch: API request failed with status {response.status}")
+    
+    except Exception as e:
+        logger.error(f"Error fetching arXiv papers: {e}", exc_info=True)
+        if verbose:
+            logger.error(f"❌ ArXiv Fetch: General error: {str(e)}")
+    
+    finally:
+        if session_created:
+            await session.close()
+    
+    if verbose:
+        logger.info(f"🏁 ArXiv Fetch: Completed. Returning {len(papers_list)} papers")
+    
+    # Always return a list, never None
+    return papers_list
 
