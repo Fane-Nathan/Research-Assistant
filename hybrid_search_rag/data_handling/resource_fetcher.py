@@ -948,7 +948,7 @@ async def fetch_arxiv_papers(
     session: Optional[aiohttp.ClientSession] = None,
     proxy: Optional[str] = None,
     fetch_pdfs: bool = False,
-    playwright_context = None,
+    playwright_context = None,  # Kept for backward compatibility but not used
     verbose: bool = False  # Add verbose flag to control detailed logging
 ) -> List[Dict[str, Any]]:
     """
@@ -964,8 +964,8 @@ async def fetch_arxiv_papers(
         sort_by: Sort order ("relevance" or "lastUpdatedDate")
         session: Optional aiohttp session to use
         proxy: Optional proxy URL
-        fetch_pdfs: Whether to fetch PDF content
-        playwright_context: Playwright context for PDF fetching
+        fetch_pdfs: Whether to fetch PDF content using direct HTTP requests
+        playwright_context: Kept for backward compatibility but no longer used
         verbose: Enable detailed progress logging
     """
     # Ensure necessary imports are available at the module level or add them here if scoped.
@@ -980,105 +980,80 @@ async def fetch_arxiv_papers(
 
     from .. import config
 
-    # Helper function to fetch and extract text from PDF using Playwright and PyMuPDF
-    async def _fetch_pdf_content_with_playwright(pdf_url: str, playwright_context) -> Optional[str]:
+    # Helper function to fetch and extract text from PDF using aiohttp directly
+    async def _fetch_pdf_content_direct(pdf_url: str, session: aiohttp.ClientSession) -> Optional[str]:
         """
-        Fetches a PDF from a URL using Playwright, extracts text content using PyMuPDF.
+        Fetches a PDF from a URL using aiohttp directly (much more reliable for arXiv PDFs),
+        extracts text content using PyMuPDF.
         """
-        if not playwright_context:
-            logger.warning(f"Playwright context not available, cannot fetch PDF from {pdf_url}")
-            return None
-
         if verbose:
-            logger.info(f"🔄 PDF Fetch: Starting download for {pdf_url}")
+            logger.info(f"🔄 PDF Fetch: Starting direct download for {pdf_url}")
             
-        page = None
         try:
-            page = await playwright_context.new_page()
-            if verbose:
-                logger.info(f"🔄 PDF Fetch: Created new page for {pdf_url}")
-                
-            await page.goto(pdf_url, timeout=60000) # Increased timeout for PDF loading
-            if verbose:
-                logger.info(f"🔄 PDF Fetch: Successfully navigated to {pdf_url}")
-
-            # Give some time for PDF to render or load if it's a viewer
-            await page.wait_for_timeout(5000) 
-
-            # Try to get PDF buffer directly if possible (e.g. if it\'s a direct PDF link)
-            # This might involve checking content-type or URL extension,
-            # or just trying to get the content and seeing if it\'s a PDF.
-            # For simplicity, we\'ll assume direct PDF or rely on Playwright\'s ability to handle it.
+            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+            timeout = aiohttp.ClientTimeout(total=120, connect=30, sock_read=60)  # 2 minute timeout
             
-            # A more robust way for direct PDFs is to download them:
-            async with page.expect_download(timeout=60000) as download_info:
-                if verbose:
-                    logger.info(f"🔄 PDF Fetch: Waiting for download to start from {pdf_url}")
+            async with session.get(pdf_url, headers=headers, timeout=timeout) as response:
+                if response.status == 200:
+                    pdf_bytes = await response.read()
                     
-                # Sometimes a click is needed if it's not a direct link but a download button
-                # For arXiv, the pdf_url is usually direct. If not, this part needs adjustment.
-                # or might need a trigger. Let's assume page.goto is enough for direct links.
-                response = await page.goto(pdf_url, timeout=60000) # Re-goto to ensure we get the response object
-                if response:
-                    pdf_bytes = await response.body()
                     if verbose:
-                        logger.info(f"✅ PDF Fetch: Got PDF bytes directly from response for {pdf_url}")
-                else:
-                    logger.error(f"Could not get response object for PDF: {pdf_url}")
-                    await page.close()
-                    return None
-
-            if not pdf_bytes:
-                logger.warning(f"No PDF content retrieved from {pdf_url}")
-                await page.close()
-                return None
-
-            # Use PyMuPDF to extract text from PDF bytes
-            try:
-                if verbose:
-                    logger.info(f"🔄 PDF Fetch: Extracting text from PDF: {pdf_url}")
+                        logger.info(f"✅ PDF Fetch: Downloaded {len(pdf_bytes)} bytes from {pdf_url}")
                     
-                pdf_doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-                text = ""
-                page_count = pdf_doc.page_count
-                
-                if verbose:
-                    logger.info(f"📄 PDF Fetch: Processing {page_count} pages from {pdf_url}")
-                
-                for page_num in range(page_count):
-                    if verbose and page_num % 10 == 0 and page_num > 0:
-                        logger.info(f"📄 PDF Fetch: Processed {page_num}/{page_count} pages from {pdf_url}")
+                    if len(pdf_bytes) == 0:
+                        logger.warning(f"Downloaded PDF is empty from {pdf_url}")
+                        return None
+                    
+                    # Use PyMuPDF to extract text from PDF bytes
+                    try:
+                        if verbose:
+                            logger.info(f"🔄 PDF Fetch: Extracting text from PDF: {pdf_url}")
+                            
+                        pdf_doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+                        text = ""
+                        page_count = pdf_doc.page_count
                         
-                    pdf_page = pdf_doc[page_num]
-                    page_text = pdf_page.get_text()
-                    text += page_text + "\n"
+                        if verbose:
+                            logger.info(f"📄 PDF Fetch: Processing {page_count} pages from {pdf_url}")
+                        
+                        for page_num in range(page_count):
+                            if verbose and page_num % 10 == 0 and page_num > 0:
+                                logger.info(f"📄 PDF Fetch: Processed {page_num}/{page_count} pages from {pdf_url}")
+                                
+                            pdf_page = pdf_doc.load_page(page_num)
+                            page_text = pdf_page.get_text("text", sort=True) # type: ignore # PyMuPDF page.get_text()
+                            text += page_text + "\n"
 
-                pdf_doc.close()
-                
-                if verbose:
-                    text_length = len(text)
-                    logger.info(f"✅ PDF Fetch: Successfully extracted {text_length} characters from {page_count} pages for {pdf_url}")
+                        pdf_doc.close()
+                        
+                        if verbose:
+                            text_length = len(text)
+                            logger.info(f"✅ PDF Fetch: Successfully extracted {text_length} characters from {page_count} pages for {pdf_url}")
+                            
+                        return text.strip()
+                        
+                    except Exception as e:
+                        logger.error(f"Error extracting text from PDF bytes for {pdf_url}: {e}", exc_info=True)
+                        if verbose:
+                            logger.error(f"❌ PDF Fetch: Failed to extract text from {pdf_url}. Error: {str(e)}")
+                        return None
+                        
+                else:
+                    logger.error(f"Failed to download PDF from {pdf_url}: HTTP {response.status}")
+                    if verbose:
+                        logger.error(f"❌ PDF Fetch: HTTP {response.status} error for {pdf_url}")
+                    return None
                     
-                await page.close()
-                return text
-            except Exception as e:
-                logger.error(f"Error extracting text from PDF bytes for {pdf_url}: {e}", exc_info=True)
-                if verbose:
-                    logger.error(f"❌ PDF Fetch: Failed to extract text from {pdf_url}. Error: {str(e)}")
-                await page.close()
-                return None
-                
-        except Exception as e:
-            logger.error(f"Error accessing PDF {pdf_url}: {e}", exc_info=True)
+        except asyncio.TimeoutError:
+            logger.error(f"Timeout while downloading PDF from {pdf_url}")
             if verbose:
-                logger.error(f"❌ PDF Fetch: Failed to access {pdf_url}. Error: {str(e)}")
-            if page:
-                await page.close()
+                logger.error(f"❌ PDF Fetch: Timeout error for {pdf_url}")
             return None
-        # If we reach here, something went wrong
-        if page:
-            await page.close()
-        return None
+        except Exception as e:
+            logger.error(f"Error downloading PDF {pdf_url}: {e}", exc_info=True)
+            if verbose:
+                logger.error(f"❌ PDF Fetch: Failed to download {pdf_url}. Error: {str(e)}")
+            return None
     
     # Main arXiv API fetching logic
     base_url = "http://export.arxiv.org/api/query"
@@ -1204,12 +1179,13 @@ async def fetch_arxiv_papers(
                             
                             # Fetch PDF content if requested
                             content = ""
-                            if fetch_pdfs and pdf_url and playwright_context:
+                            if fetch_pdfs and pdf_url:
                                 if verbose:
                                     logger.info(f"📄 ArXiv Fetch: Attempting PDF fetch for {title[:50]}...")
                                 
                                 try:
-                                    pdf_content = await _fetch_pdf_content_with_playwright(pdf_url, playwright_context)
+                                    # Use direct aiohttp download instead of Playwright
+                                    pdf_content = await _fetch_pdf_content_direct(pdf_url, session)
                                     if pdf_content:
                                         content = pdf_content
                                         if verbose:
@@ -1221,6 +1197,10 @@ async def fetch_arxiv_papers(
                                     logger.warning(f"PDF fetch failed for {title}: {pdf_e}")
                                     if verbose:
                                         logger.warning(f"⚠️ ArXiv Fetch: PDF error for {title[:50]}: {str(pdf_e)}")
+                            
+                            # Use abstract as fallback if no PDF content
+                            if not content:
+                                content = summary
                             
                             paper_data['content'] = content
                             papers_list.append(paper_data)

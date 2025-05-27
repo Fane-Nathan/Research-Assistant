@@ -40,8 +40,7 @@ try:
     from hybrid_search_rag.data_handling.resource_fetcher import (
         fetch_arxiv_papers,
         crawl_and_fetch_web_articles,
-        PLAYWRIGHT_AVAILABLE, # Import for checking
-        async_playwright # Import for creating context
+        PLAYWRIGHT_AVAILABLE # Import for checking
     )
     from hybrid_search_rag.embedding_services.gemini_embedder import EmbeddingModel
     from hybrid_search_rag.data_handling.data_manager import DataManager
@@ -271,26 +270,11 @@ Provide *only* the queries and URLs in the specified format.'''
     logger.info(f"Fetching: arXiv query='{arxiv_query}' (max={max_results}), URLs={len(target_urls)}")
     
     arxiv_metadata_list: List[Dict[str, Any]] = []
-    playwright_context_for_arxiv = None
-    playwright_instance_arxiv = None
-    browser_for_arxiv = None # Define browser_for_arxiv here
 
     try:
-        # ---- START MODIFICATION for arXiv PDF fetching ----
-        should_fetch_arxiv_pdfs = True # Enable PDF fetching for arXiv
-
-        if should_fetch_arxiv_pdfs and PLAYWRIGHT_AVAILABLE:
-            logger.info("Setting up Playwright context for arXiv PDF fetching...")
-            playwright_instance_arxiv = await async_playwright().start()
-            browser_for_arxiv = await playwright_instance_arxiv.chromium.launch(headless=True) # Assign to browser_for_arxiv
-            playwright_context_for_arxiv = await browser_for_arxiv.new_context( # Use browser_for_arxiv
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-                ignore_https_errors=True
-            )
-        elif should_fetch_arxiv_pdfs and not PLAYWRIGHT_AVAILABLE:
-            logger.warning("Playwright is not available. Cannot fetch arXiv PDF content. Proceeding with metadata only.")
-            should_fetch_arxiv_pdfs = False
-        # ---- END MODIFICATION ----
+        # Enable PDF fetching for arXiv - now uses direct HTTP requests, no Playwright needed
+        should_fetch_arxiv_pdfs = True 
+        logger.info("arXiv PDF fetching enabled (using direct HTTP requests)")
 
         if arxiv_query and max_results > 0:
             try:
@@ -298,7 +282,6 @@ Provide *only* the queries and URLs in the specified format.'''
                     query=arxiv_query,
                     max_results=max_results,
                     fetch_pdfs=should_fetch_arxiv_pdfs,
-                    playwright_context=playwright_context_for_arxiv,
                     verbose=args.debug # Pass debug flag for verbose logging in fetcher
                 )
             except Exception as arxiv_e:
@@ -320,14 +303,8 @@ Provide *only* the queries and URLs in the specified format.'''
         else:
             web_metadata_list = []
 
-    finally: # Ensure Playwright resources for arXiv are cleaned up
-        if playwright_context_for_arxiv:
-            await playwright_context_for_arxiv.close()
-        if browser_for_arxiv: # Check if browser_for_arxiv was initialized
-            await browser_for_arxiv.close()
-        if playwright_instance_arxiv:
-            await playwright_instance_arxiv.stop()
-        logger.info("Cleaned up Playwright resources for arXiv PDF fetching if any were used.")
+    finally: # Ensure resource cleanup
+        logger.info("Completed data fetching process.")
 
     original_documents = arxiv_metadata_list + web_metadata_list
     num_docs_fetched = len(original_documents)
