@@ -1,0 +1,175 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS specific
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+.qodo
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Large data files and datasets
+data/
+data_hybrid/
+output_data/
+arxiv_dataset/
+finetune/dataset/
+*.jsonl
+*.json
+*.csv
+*.parquet
+*.h5
+*.hdf5
+*.pickle
+*.pkl
+
+# Model files
+*.bin
+*.safetensors
+*.ckpt
+*.pth
+*.pt
+*.tar
+*.tar.gz
+*.zip
+
+# Logs
+logs/
+logs_*/
+*.log
+*.out
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+hold.txt
+
+# Documentation builds
+docs/_build/
+site/
+
+# Configuration files with secrets
+config.ini
+settings.json
+credentials.json
+.env.*
+
+# Large media files
+*.mp4
+*.avi
+*.mkv
+*.mov
+*.wmv
+*.flv
+*.webm
+*.mp3
+*.wav
+*.flac
+*.aac
+*.ogg
+*.wma
+*.pdf
+*.doc
+*.docx
+*.xls
+*.xlsx
+*.ppt
+*.pptx
+
+# Archive files
+*.rar
+*.7z
+*.gz
+*.bz2
+*.xz
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Cache directories
+.cache/
+cache/
+
+# Node.js (if any frontend components)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.eslintcache
+
+# Additional exclusions for this project
+finetune/logs/
+logs_arxiv_collection/
+scripts/output_data_*/
+scripts/logs_*/
