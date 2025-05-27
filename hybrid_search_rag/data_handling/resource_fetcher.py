@@ -1149,24 +1149,24 @@ async def fetch_arxiv_papers(
                         try:
                             # Extract basic metadata
                             title_elem = entry.find('.//{http://www.w3.org/2005/Atom}title')
-                            title = title_elem.text.strip() if title_elem is not None else "N/A"
+                            title = title_elem.text.strip() if (title_elem is not None and title_elem.text is not None) else "N/A"
                             
                             summary_elem = entry.find('.//{http://www.w3.org/2005/Atom}summary')
-                            summary = summary_elem.text.strip() if summary_elem is not None else ""
+                            summary = summary_elem.text.strip() if (summary_elem is not None and summary_elem.text is not None) else ""
                             
                             # Extract published date
                             published_elem = entry.find('.//{http://www.w3.org/2005/Atom}published')
-                            published = published_elem.text.strip() if published_elem is not None else ""
+                            published = published_elem.text.strip() if (published_elem is not None and published_elem.text is not None) else ""
                             
                             # Extract updated date
                             updated_elem = entry.find('.//{http://www.w3.org/2005/Atom}updated')
-                            updated = updated_elem.text.strip() if updated_elem is not None else ""
+                            updated = updated_elem.text.strip() if (updated_elem is not None and updated_elem.text is not None) else ""
                             
                             # Extract arXiv ID from the entry ID
                             id_elem = entry.find('.//{http://www.w3.org/2005/Atom}id')
                             entry_id = ""
                             pdf_url = ""
-                            if id_elem is not None:
+                            if id_elem is not None and id_elem.text is not None:
                                 entry_id = id_elem.text.strip()
                                 # Extract arXiv ID from URL like http://arxiv.org/abs/1234.5678v1
                                 arxiv_id = entry_id.split('/')[-1] if '/' in entry_id else entry_id
@@ -1177,7 +1177,7 @@ async def fetch_arxiv_papers(
                             author_elems = entry.findall('.//{http://www.w3.org/2005/Atom}author')
                             for author_elem in author_elems:
                                 name_elem = author_elem.find('.//{http://www.w3.org/2005/Atom}name')
-                                if name_elem is not None:
+                                if name_elem is not None and name_elem.text is not None:
                                     authors.append(name_elem.text.strip())
                             
                             # Extract categories

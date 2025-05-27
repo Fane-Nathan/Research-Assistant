@@ -550,23 +550,8 @@ def run_arxiv_search(query: str, num_results: int) -> List[Dict[str, Any]]:
     logger.info(f"Searching arXiv directly for: '{query}' (Top {num_results})")
     results_list: List[Dict[str, Any]] = []
     
-    # Try to import and apply our SSL patch
-    try:
-        # Path to arxiv_ssl_patch module
-        sys.path.insert(0, os.path.join(script_dir))
-        from arxiv_ssl_patch import arxiv_ssl_patch, with_arxiv_retry
-        arxiv_ssl_patch()
-        
-        # Create client with retry decorator
-        @with_arxiv_retry(max_attempts=5, min_wait=2.0, max_wait=30.0)
-        def create_arxiv_client():
-            return arxiv.Client(page_size=min(num_results, 100), delay_seconds=1.0, num_retries=5)
-        
-        client = create_arxiv_client()
-    except ImportError:
-        # Fall back to normal client if patch isn't available
-        logger.warning("SSL patch module not found; using standard client (vulnerable to SSL errors)")
-        client = arxiv.Client(page_size=min(num_results, 100), delay_seconds=1.0, num_retries=3)
+    # Use standard arxiv client with error handling
+    client = arxiv.Client(page_size=min(num_results, 100), delay_seconds=1.0, num_retries=5)
     
     try:
         search = arxiv.Search(query=query, max_results=num_results, sort_by=arxiv.SortCriterion.Relevance)
