@@ -128,10 +128,10 @@ def _parse_pdf_content(pdf_bytes: bytes, source_url: str) -> Union[str, None]:
         if not cleaned_text:
             logger.warning(f"No text extracted from PDF after cleaning: {source_url}")
         return cleaned_text
-    except fitz.fitz.EmptyFileError:
+    except fitz.EmptyFileError:
          logger.warning(f"PDF processing failed: Empty/invalid PDF. {source_url}")
          return None
-    except fitz.fitz.FileDataError as data_err:
+    except fitz.FileDataError as data_err:
          logger.warning(f"PDF processing failed: Data Error. {source_url}: {data_err}")
          return None
     except Exception as e:

@@ -40,7 +40,7 @@ from typing import List, Dict, Any, Tuple, Generator, Optional # Added Generator
 import asyncio # For async web crawl
 import numpy as np # For handling embeddings
 import pickle # For BM25 index loading/saving (indirectly via DataManager)
-from rank_bm25 import BM25Okapi # For rebuilding BM25 index
+from rank_bm25 import BM25Okapi # type: ignore # For rebuilding BM25 index
 
 # --- Basic Logging Setup ---
 logging.basicConfig(
@@ -58,7 +58,6 @@ if project_root not in sys.path:
 logger.info(f"Project Root added to sys.path: {project_root}")
 # --- End Path Setup ---
 
-
 # --- Project Module Imports ---
 # Highlighting import is REMOVED.
 logger.info("Attempting project module imports...")
@@ -72,7 +71,7 @@ load_components = None
 
 try:
     from hybrid_search_rag import config
-    from scripts.cli import ( # MODIFIED: Path updated
+    from scripts.cli import ( 
         load_components,
         run_recommendation, 
         setup_data_and_fetch,
@@ -86,12 +85,8 @@ try:
     from hybrid_search_rag.embedding_services.gemini_embedder import EmbeddingModel # Assuming Gemini embeddings
     from hybrid_search_rag.retrieval_algorithm.hybrid_recommender import NltkManager # For tokenizing BM25
 
-    # REMOVED: Import for highlighting
-    # from hybrid_search_rag.utils.highlighting import highlight_sources_fuzzy
-    # highlighting_available = True # Flag removed
-
     project_modules_loaded = True
-    logger.info("Project module imports successful (including highlighting).") # Updated log message slightly
+    logger.info("Project module imports successful.") 
 except ImportError as e:
     st.error(f"Failed to import project modules (ImportError). Check setup and ensure scripts/cli.py and hybrid_search_rag package are accessible. Error: {e}")
     st.code(f"Current sys.path: {sys.path}")
@@ -100,15 +95,21 @@ except Exception as e:
     # Catch other errors during import
     st.error(f"Unexpected error during project imports: {e}. App functionality will be limited.")
     logger.error(f"Project import failed (Exception): {e}", exc_info=True)
-    # If the error is the Prometheus one, add a specific hint
     if 'Duplicated timeseries' in str(e):
         st.warning("Hint: The 'Duplicated timeseries' error often relates to Prometheus metrics. Ensure they are removed or handled correctly in resource_fetcher.py if not needed.")
 # --- End Project Module Imports ---
 
+# --- Windows asyncio policy fix for Playwright/subprocesses ---
+if sys.platform == "win32":
+    logger.info("Applying WindowsProactorEventLoopPolicy for asyncio.")
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+# --- End Windows asyncio policy fix ---
+
+
 # --- Async Helper for Recommendation Submission ---
-async def handle_recommendation_submission_async(query: str, top_n: int, general_mode: bool, concise_mode: bool, answer_placeholder: Any, project_modules_loaded: bool):
+async def handle_recommendation_submission_async(query: str, top_n: int, general_mode: bool, concise_mode: bool, answer_placeholder: Any, project_modules_loaded_flag: bool): # Renamed arg
     """Handles the recommendation submission logic asynchronously."""
-    if not project_modules_loaded: # Double check, though components_loaded_status should also cover this
+    if not project_modules_loaded_flag: 
         st.error("Cannot recommend: Core project modules not loaded.")
         return
 
@@ -131,7 +132,7 @@ async def handle_recommendation_submission_async(query: str, top_n: int, general
 
         full_response_list = []
         error_in_stream = False
-        for chunk in response_generator: # FIXED: Use regular for loop since generator is not async
+        for chunk in response_generator: 
             if isinstance(chunk, str) and chunk.startswith("[Error:"):
                 st.error(f"LLM Error: {chunk}", icon="❌")
                 logger.error(f"LLM generation failed: {chunk}")
@@ -162,31 +163,29 @@ async def handle_recommendation_submission_async(query: str, top_n: int, general
 
 
 # --- NLTK Data Download Logic ---
-# Reuse the NLTK check function from cli.py if modules loaded
 if project_modules_loaded and check_nltk_data:
     try:
         if 'nltk_data_checked_app' not in st.session_state:
              with st.spinner("Checking NLTK data..."):
                  logger.info("Running initial NLTK check via imported function...")
-                 check_nltk_data() # Call the function from cli.py
+                 check_nltk_data() 
                  st.session_state.nltk_data_checked_app = True
                  logger.info("Initial NLTK check complete.")
     except NameError:
          st.error("NLTK check function `check_nltk_data` not found. Manual NLTK check block needed.")
          pass
-    except SystemExit: # Catch SystemExit if NLTK download fails during init
+    except SystemExit: 
           st.error("Fatal Error: Failed to download required NLTK data during startup. App cannot continue.")
           logger.critical("NLTK download failed during initial check. Stopping app.")
-          st.stop() # Stop app execution
+          st.stop() 
     except Exception as nltk_e:
          st.error(f"Error during initial NLTK check: {nltk_e}")
          logger.error(f"NLTK check failed during app init: {nltk_e}", exc_info=True)
-         st.stop() # Stop if essential NLTK check fails
+         st.stop() 
 else:
     logger.warning("Skipping NLTK check as project modules failed to load.")
 
-# --- Title, Introduction, and Disclaimer (Enhanced) ---
-# (Remains unchanged)
+# --- Title, Introduction, and Disclaimer ---
 st.title("📚 Research Paper Assistant")
 st.subheader("Unlock insights from academic literature with AI")
 st.markdown("""
@@ -209,7 +208,7 @@ st.divider()
 
 # --- Caching Components ---
 @st.cache_resource
-def cached_load_components(): # MODIFIED: Made synchronous
+def cached_load_components(): 
     """
     Loads core RAG components using the imported 'load_components' function.
     Uses session state to force reload after data updates.
@@ -219,29 +218,22 @@ def cached_load_components(): # MODIFIED: Made synchronous
         logger.error("Cannot load components: project modules failed import prior to this call.")
         return False, "Core project modules failed to import."
 
-    # --- FIXED: Check session state flag to force reload ---
     force_reload_flag = st.session_state.get("force_component_reload", False)
     if force_reload_flag:
         logger.info("Force reload flag set, calling load_components with force_reload=True.")
-        # Clear the flag immediately after reading it
         st.session_state.force_component_reload = False
-    # --- End Fix ---
-
+    
     try:
-        # Ensure NLTK is checked before loading components
         if check_nltk_data:
             check_nltk_data()
         
-        # Check if load_components is available
         if load_components is None:
             logger.error("load_components function not available - project modules failed to import")
             return False, "load_components function not available"
             
-        # Call the now-synchronous load_components function
         load_components(force_reload=force_reload_flag)
 
-        # Check if the recommender object exists in cli.py after loading
-        from scripts.cli import loaded_recommender # MODIFIED: Path updated
+        from scripts.cli import loaded_recommender 
         if loaded_recommender is not None:
              logger.info("Component loading logic successful (based on \'loaded_recommender\' indicator).")
              return True, None
@@ -251,7 +243,7 @@ def cached_load_components(): # MODIFIED: Made synchronous
     except NameError as ne:
          logger.error(f"NameError during component loading check: {ne}. Cannot verify loaded state.", exc_info=True)
          return False, f"Error accessing loaded state indicator from 'scripts.cli'. NameError: {ne}"
-    except SystemExit: # Catch NLTK download failure during component load
+    except SystemExit: 
          logger.critical("NLTK download failed during component loading. Cannot proceed.")
          return False, "Failed to acquire NLTK data during component loading."
     except Exception as e:
@@ -261,7 +253,6 @@ def cached_load_components(): # MODIFIED: Made synchronous
 
 
 # --- Initial Setup ---
-# (Remains unchanged)
 logger.info("Attempting initial component load via cached function...")
 components_loaded_status, load_error_message = False, "Project modules did not load."
 if project_modules_loaded:
@@ -278,7 +269,6 @@ if not components_loaded_status and project_modules_loaded:
 
 
 # --- UI Tabs (with Icons) ---
-# (Remains unchanged)
 logger.info("Defining UI tabs...")
 tab_rec, tab_how, tab_about, tab_fetch, tab_arxiv, tab_feedback = st.tabs([
     "🧠 **Recommend**",
@@ -291,11 +281,10 @@ tab_rec, tab_how, tab_about, tab_fetch, tab_arxiv, tab_feedback = st.tabs([
 logger.info("UI tabs defined.")
 
 
-# --- Recommendation Tab (Highlighting Removed) ---
-# (Remains unchanged from user's provided version)
+# --- Recommendation Tab ---
 with tab_rec:
     st.header("💬 Ask the RAG Assistant")
-    st.markdown("Enter your research topic or question below. The assistant will retrieve relevant information from the indexed documents and generate an answer.") # Removed "cited"
+    st.markdown("Enter your research topic or question below. The assistant will retrieve relevant information from the indexed documents and generate an answer.")
 
     col1_rec, col2_rec = st.columns([3, 1])
 
@@ -334,7 +323,6 @@ with tab_rec:
             use_container_width=True
         )
 
-    # --- Logic when Button is Clicked ---
     if submit_rec:
         if not components_loaded_status:
             st.error("Cannot recommend: Core components failed load.")
@@ -349,13 +337,13 @@ with tab_rec:
 
             st.session_state.llm_answer = None
             st.session_state.context_sources = []
-            st.session_state.raw_context_chunks = [] # Retained for potential future use, though not directly used by LLM
+            st.session_state.raw_context_chunks = [] 
             answer_placeholder = st.empty()
 
-            top_n_val = 5 # Default
+            top_n_val = 5 
             if project_modules_loaded:
                 try:
-                    from hybrid_search_rag import config # Ensure config is imported for this scope
+                    from hybrid_search_rag import config 
                     top_n_val = config.TOP_N_RESULTS
                 except (ImportError, AttributeError) as e:
                     logger.warning(f"Could not get config.TOP_N_RESULTS ({e}), using default {top_n_val}.")
@@ -367,7 +355,7 @@ with tab_rec:
                     general_mode,
                     concise_mode,
                     answer_placeholder,
-                    project_modules_loaded
+                    project_modules_loaded # Pass the flag
                 ))
             except Exception as e:
                 st.error(f"Error running async recommendation task: {e}", icon="❌")
@@ -402,17 +390,13 @@ with tab_how:
         * **Smart Ranking (RRF):** Results are combined using Reciprocal Rank Fusion (RRF) for a balanced relevance ranking.
         """)
         st.subheader("4️⃣ LLM Generation")
-        # --- FIXED: Use new config structure ---
-        llm_provider_display = "a Large Language Model (LLM)" # Default
+        llm_provider_display = "a Large Language Model (LLM)" 
         if project_modules_loaded and config and hasattr(config, 'LLM_PROVIDER_ORDER') and config.LLM_PROVIDER_ORDER:
-            # Display the primary provider (first in the list)
             llm_provider_display = config.LLM_PROVIDER_ORDER[0].capitalize()
             if len(config.LLM_PROVIDER_ORDER) > 1:
-                 # Show fallback only if it's different from primary
                  fallback_provider = config.LLM_PROVIDER_ORDER[1].capitalize()
                  if fallback_provider != llm_provider_display:
                       llm_provider_display += f" (with fallback to {fallback_provider})"
-        # --- End Fix ---
         st.markdown(f"""
         * **Context Injection:** Top-ranked retrieved chunks are passed as context to {llm_provider_display}.
         * **Informed Answering:** The LLM generates an answer based on the provided context (Strict RAG) or a mix (Hybrid Mode).
@@ -434,7 +418,6 @@ with tab_how:
 
 
 # --- About Tab ---
-# (Remains unchanged)
 with tab_about:
     st.header("ℹ️ About This Project")
     col1_about, col2_about = st.columns(2)
@@ -450,7 +433,7 @@ with tab_about:
         * **Hybrid Search:** Combines semantic (vector) and keyword (BM25) search with RRF.
         * **LLM Integration:** Uses Gemini/Groq for generation (Strict/Hybrid modes) with fallback.
         * **UI:** Interactive Streamlit interface for querying, data fetching, and arXiv search.
-        """) # Updated LLM integration description
+        """) 
     with col2_about:
         st.subheader("🚀 Future Work & Ideas")
         st.markdown("""
@@ -470,14 +453,13 @@ with tab_about:
 # --- End About Tab ---
 
 
-# --- Fetch Data Tab (With Single URL Crawl Added) ---
+# --- Fetch Data Tab ---
 with tab_fetch:
     st.header("⏬ Update Knowledge Base")
     st.markdown("""
     Fetch new data from arXiv or web URLs to update the local knowledge base. This involves fetching, chunking, embedding, and indexing.
     """)
 
-    # Session state for fetch parameters
     if 'fetch_arxiv_query' not in st.session_state: st.session_state.fetch_arxiv_query = "large language models"
     if 'fetch_num_arxiv' not in st.session_state: st.session_state.fetch_num_arxiv = 10
     if 'fetch_suggest_sources' not in st.session_state: st.session_state.fetch_suggest_sources = False
@@ -498,7 +480,6 @@ with tab_fetch:
             help="The LLM will try to find relevant arXiv queries and web URLs for this topic."
         )
         st.session_state.fetch_topic_for_suggestion = topic_for_suggestion
-        # Disable manual arXiv query if suggestions are used
         st.text_input(
             "arXiv Query (disabled when suggesting sources):",
             value=st.session_state.fetch_arxiv_query,
@@ -543,53 +524,84 @@ with tab_fetch:
             with st.spinner("Fetching and processing data... This may take a while."):
                 try:
                     from scripts.cli import setup_data_and_fetch as cli_setup_data_and_fetch
-                    from hybrid_search_rag import config # Ensure config is available
+                    from hybrid_search_rag import config 
 
-                    # Create a mock args namespace for setup_data_and_fetch
                     fetch_args_list = []
                     if use_suggestions:
                         fetch_args_list.extend(["--suggest-sources", "-t", st.session_state.fetch_topic_for_suggestion])
-                        # When suggesting, num_arxiv from UI is ignored, cli.py's setup_data_and_fetch will use a default or LLM suggested one.
-                        # We still pass a value for num_arxiv as the argparse in cli expects it.
-                        fetch_args_list.extend(["--num-arxiv", str(st.session_state.fetch_num_arxiv)]) # Pass UI value, might be overridden by LLM
+                        fetch_args_list.extend(["--num-arxiv", str(st.session_state.fetch_num_arxiv)]) 
                     else:
                         if st.session_state.fetch_arxiv_query and st.session_state.fetch_num_arxiv > 0:
                             fetch_args_list.extend(["--arxiv-query", st.session_state.fetch_arxiv_query, "--num-arxiv", str(st.session_state.fetch_num_arxiv)])
                         else:
-                             # Provide a default dummy query if none is set, to satisfy argparse, but num_arxiv=0 will prevent fetch
                             fetch_args_list.extend(["--arxiv-query", "dummy_query_to_satisfy_parser", "--num-arxiv", "0"])
+                    
+                    # --- MODIFICATION for single URL fetch ---
+                    # The cli.py setup_data_and_fetch expects target_urls to be derived from config or LLM.
+                    # We'll directly call crawl_and_fetch_web_articles if a single URL is given,
+                    # and then combine it with any arXiv results.
+                    # This bypasses the argparse logic in cli.py for the web URL part for simplicity here.
 
-                    # Handle web URL if provided
+                    # Create a mock args namespace just for arXiv fetching part of cli_setup_data_and_fetch
+                    # We will handle the single web URL separately if provided.
+                    temp_parser = argparse.ArgumentParser()
+                    temp_parser.add_argument("--arxiv-query", type=str, default="")
+                    temp_parser.add_argument("--num-arxiv", type=int, default=0)
+                    temp_parser.add_argument("--suggest-sources", action="store_true")
+                    temp_parser.add_argument("-t", "--topic", type=str, default="")
+                    temp_parser.add_argument("--debug", action="store_true", default=False) # Add debug
+                    temp_parser.add_argument("--num-web-pages", type=int, default=config.MAX_PAGES_TO_CRAWL) # Add num_web_pages
+
+
+                    # If a single web URL is provided, we will fetch it separately
+                    # and then pass its results to a modified processing step.
+                    # For now, let's assume cli_setup_data_and_fetch handles arXiv
+                    # and we'll manually trigger the web crawl if web_url_fetch is set.
+
+                    # This part becomes complex because cli_setup_data_and_fetch is designed to do everything.
+                    # A cleaner approach would be to refactor cli.py to have separate functions for
+                    # arXiv fetching, web fetching, and then processing.
+                    # Given the current structure, the most direct way is to call cli_setup_data_and_fetch
+                    # and if a single web URL is given, ensure TARGET_WEB_URLS in config is temporarily set or
+                    # modify cli_setup_data_and_fetch to accept a direct list of URLs.
+
+                    # For this fix, let's assume the user wants to use the *existing* `cli_setup_data_and_fetch`
+                    # which means if they provide a single URL, it's more of an instruction to *include* it
+                    # if web crawling is generally active (e.g. via config or LLM suggestion).
+                    # The current `cli_setup_data_and_fetch` doesn't take a direct URL list argument.
+                    # So, the single URL input in UI is more of a "wish" that needs backend adjustment
+                    # or relies on `config.TARGET_WEB_URLS` being updated or LLM suggesting it.
+
+                    # The simplest way to make the single URL work *with the current cli.py* is to
+                    # temporarily modify config.TARGET_WEB_URLS if a single URL is provided. This is a hack.
+                    
+                    original_target_urls = None
                     if web_url_fetch and web_url_fetch.strip():
-                        # The current setup_data_and_fetch doesn't directly take a single URL via args.
-                        # It uses config.TARGET_WEB_URLS or LLM suggested URLs.
-                        # For this UI, we'll need to adjust how single URLs are handled.
-                        # Option 1: Modify cli.py to accept a --single-url arg (more robust)
-                        # Option 2: Temporarily override config.TARGET_WEB_URLS (hacky)
-                        # For now, we'll inform the user this part is a bit conceptual or relies on config.
-                        st.info(f"Web URL '{web_url_fetch}' noted. Ensure your `config.py` or LLM suggestions include it, or modify `cli.py` to handle single URL inputs directly for this button to process it.")
-                        # If we were to implement it via args, it might look like:
-                        # fetch_args_list.extend(["--web-urls", web_url_fetch]) # Assuming cli.py is updated
+                        logger.info(f"Single web URL provided: {web_url_fetch}. Will attempt to include it.")
+                        # Hacky: Temporarily modify config for this run
+                        if hasattr(config, 'TARGET_WEB_URLS'):
+                            original_target_urls = list(config.TARGET_WEB_URLS) # Backup
+                            config.TARGET_WEB_URLS = [web_url_fetch.strip()] + original_target_urls
+                        else:
+                            config.TARGET_WEB_URLS = [web_url_fetch.strip()]
+                        # If using LLM suggestions, the LLM might also suggest URLs. This single URL will be added.
+                        # If not using LLM suggestions, and no arXiv query, this will be the only source.
+                        if not use_suggestions and not (st.session_state.fetch_arxiv_query and st.session_state.fetch_num_arxiv > 0):
+                             logger.info("Only single web URL provided. Setting num_arxiv to 0 to focus on web.")
+                             fetch_args_list = ["--arxiv-query", "dummy_for_parser", "--num-arxiv", "0"]
 
-                    parser = argparse.ArgumentParser()
-                    # Add arguments that setup_data_and_fetch expects
-                    parser.add_argument("--arxiv-query", type=str, default="")
-                    parser.add_argument("--num-arxiv", type=int, default=0)
-                    parser.add_argument("--suggest-sources", action="store_true")
-                    parser.add_argument("-t", "--topic", type=str, default="")
-                    # Potentially add --web-urls if cli.py is updated
-                    # parser.add_argument("--web-urls", nargs='+', default=[])
 
-                    fetch_args = parser.parse_args(fetch_args_list)
+                    fetch_args_parsed = temp_parser.parse_args(fetch_args_list)
+                    
+                    status_message = asyncio.run(cli_setup_data_and_fetch(fetch_args_parsed))
 
-                    # status_message = cli_setup_data_and_fetch(fetch_args) # OLD SYNCHRONOUS CALL
-                    status_message = asyncio.run(cli_setup_data_and_fetch(fetch_args)) # MODIFIED: Use asyncio.run
+                    if original_target_urls is not None and hasattr(config, 'TARGET_WEB_URLS'): # Restore config
+                        config.TARGET_WEB_URLS = original_target_urls
+
 
                     st.success(status_message)
                     logger.info(f"Data fetch status: {status_message}")
-                    # Force reload of components after data update
                     st.session_state.force_component_reload = True
-                    # Rerun cached_load_components to reflect new data
                     try:
                         components_loaded_status, load_error_message = cached_load_components()
                         if components_loaded_status:
@@ -610,7 +622,6 @@ with tab_fetch:
 
 
 # --- Search arXiv Tab ---
-# (Remains unchanged)
 with tab_arxiv:
     st.header("🔍 Search arXiv Directly")
     st.markdown("Use this tab to perform a direct keyword search on arXiv.org. Results are fetched in real-time.")
@@ -618,32 +629,31 @@ with tab_arxiv:
     if 'arxiv_query_direct' not in st.session_state: st.session_state.arxiv_query_direct = "quantum machine learning"
     if 'arxiv_num_results_direct' not in st.session_state: st.session_state.arxiv_num_results_direct = 5
 
-    arxiv_query = st.text_input(
+    arxiv_query_direct_val = st.text_input( # Renamed variable to avoid conflict
         "arXiv Search Query:",
         value=st.session_state.arxiv_query_direct,
-        key="arxiv_direct_query_input",
+        key="arxiv_direct_query_input_key", # Ensure key is unique
         help="Enter your search terms (e.g., 'cs.CV AND object detection')"
     )
-    num_results = st.number_input(
+    num_results_direct_val = st.number_input( # Renamed variable
         "Max Results:",
         min_value=1, max_value=50, value=st.session_state.arxiv_num_results_direct, step=1,
-        key="arxiv_direct_num_input"
+        key="arxiv_direct_num_input_key" # Ensure key is unique
     )
 
-    submit_arxiv_search = st.button("Search arXiv", type="primary", disabled=not project_modules_loaded or not arxiv_query)
+    submit_arxiv_search = st.button("Search arXiv", type="primary", disabled=not project_modules_loaded or not arxiv_query_direct_val)
 
     if submit_arxiv_search:
         if not project_modules_loaded:
             st.error("Cannot search arXiv: Core components not loaded.")
         else:
-            st.session_state.arxiv_query_direct = arxiv_query
-            st.session_state.arxiv_num_results_direct = num_results
-            logger.info(f"Performing direct arXiv search for: '{arxiv_query}', num_results={num_results}")
+            st.session_state.arxiv_query_direct = arxiv_query_direct_val
+            st.session_state.arxiv_num_results_direct = num_results_direct_val
+            logger.info(f"Performing direct arXiv search for: '{arxiv_query_direct_val}', num_results={num_results_direct_val}")
             with st.spinner("Searching arXiv..."):
                 try:
                     from scripts.cli import run_arxiv_search as cli_run_arxiv_search
-                    # Direct arXiv search using the imported function
-                    results = cli_run_arxiv_search(arxiv_query, num_results) # FIXED: Removed asyncio.run since function is not async
+                    results = cli_run_arxiv_search(arxiv_query_direct_val, num_results_direct_val) 
 
                     if results:
                         st.success(f"Found {len(results)} results on arXiv:")
@@ -667,7 +677,6 @@ with tab_arxiv:
 
 
 # --- Feedback Tab ---
-# (Remains unchanged)
 with tab_feedback:
     st.header("📝 Submit Feedback or Report Issues")
     st.markdown("""
@@ -688,15 +697,15 @@ with tab_feedback:
 
 
 # --- Footer ---
-# (Remains unchanged)
 st.divider()
 st.markdown(
     """
     <div style='text-align: center; color: grey; font-size: 0.9em;'>
-        © 2025 Felix Nathaniel, Reynaldi Anatyo, Dennison Soedibjo | BINUS University Computer Science <br>
+        © 2025 Felix Nathaniel, Reynaldi Anatyo, Dennison Soedibjo, Joshua Michael Irwanto, Wilbert Devos Kyenil | BINUS University Computer Science <br>
         Research Paper Assistant
     </div>
     """,
     unsafe_allow_html=True
 )
 # --- End Footer ---
+
