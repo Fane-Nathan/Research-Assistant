@@ -19,7 +19,7 @@ st.set_page_config(
     layout="wide",                      # Use full width of the page
     initial_sidebar_state="auto",       # Sidebar behavior (can be used later)
     menu_items={                        # Custom items in the Streamlit menu (top right)
-        'Get Help': 'https://github.com/Fane-Nathan/Study-Assistant', # Link to project repo
+        'Get Help': 'https://github.com/Fane-Nathan/Research-Assistant/tree/alpha-release', # Link to project repo
         'Report a bug': "https://tally.so/r/n0kkp6",                  # Link to feedback form
         'About': "# About This Project\nThis app helps explore academic research using RAG." # Simple about text
     }
@@ -449,7 +449,7 @@ with tab_about:
 
         *Computer Science Students at BINUS University, exploring the fascinating world of AI and Information Retrieval.*
         """)
-        st.link_button("View Project on GitHub", "https://github.com/Fane-Nathan/Study-Assistant")
+        st.link_button("View Project on GitHub", "https://github.com/Fane-Nathan/Research-Assistant/tree/alpha-release")
 # --- End About Tab ---
 
 
