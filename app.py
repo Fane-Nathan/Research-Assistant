@@ -11,6 +11,7 @@ Provides an enhanced user interface for:
 6. Adding content by crawling a single user-provided URL.
 """
 
+import json
 import streamlit as st
 # --- Page Configuration MUST be the first Streamlit command ---
 st.set_page_config(
@@ -140,8 +141,17 @@ async def handle_recommendation_submission_async(query: str, top_n: int, general
         logger.error("ImportError within handle_recommendation_submission_async for run_recommendation or config.")
         return
 
-    logger.info(f"Async handler: Streaming response for query '{query[:50]}...'")
+    # Check if we're in empty knowledge base mode and need to display a special message
+    kb_is_empty = (hasattr(st.session_state, 'knowledge_base_is_empty') and st.session_state.knowledge_base_is_empty)
+    
+    logger.info(f"Async handler: Streaming response for query '{query[:50]}...' (KB empty: {kb_is_empty})")
+    
     try:
+        # Empty knowledge base handling - make sure we force general_mode=True
+        if kb_is_empty:
+            general_mode = True
+            logger.info("Knowledge base is empty - forcing general_mode=True")
+        
         # Use the imported cli_run_recommendation
         response_generator, context_sources, _ = await cli_run_recommendation(
             query, top_n, general_mode, concise_mode
@@ -377,13 +387,13 @@ with tab_rec:
             "✨ Get Recommendation",
             type="primary",
             key="rec_button",
-            disabled=not query, # Only disable if query is empty, allow even with empty knowledge base
+            disabled=not query, # Only disable if query is empty, regardless of knowledge base status
             use_container_width=True
         )
         
-        # Show helpful guidance when knowledge base is empty
+        # Show helpful guidance when knowledge base is empty, but don't prevent button use
         if not components_loaded_status or (hasattr(st.session_state, 'knowledge_base_is_empty') and st.session_state.knowledge_base_is_empty):
-            st.caption("💡 **Knowledge base is empty** - Add research papers in the 'Update Knowledge Base' tab to get started!")
+            st.caption("💡 **Knowledge base is empty** - The AI will use its general knowledge, but adding papers in the 'Update Knowledge Base' tab will give better results!")
 
     if submit_rec:
         # Always save the user's query and preferences regardless of knowledge base status
@@ -393,11 +403,13 @@ with tab_rec:
         mode_name = "Hybrid" if general_mode else "Strict"
         style_name = "Concise" if concise_mode else "Detailed"
         
-        if not components_loaded_status:
-            # Allow proceeding with empty knowledge base, but show warning
-            st.warning("⚠️ **Knowledge base appears to be empty!** The AI will attempt to use its general knowledge, but without any specific research papers to reference.", icon="📚")
-            st.markdown("💡 **Recommendation**: For better results, consider adding research papers in the 'Update Knowledge Base' tab.")
+        if not components_loaded_status or (hasattr(st.session_state, 'knowledge_base_is_empty') and st.session_state.knowledge_base_is_empty):
+            # Show warning for empty knowledge base, but proceed anyway
+            st.warning("⚠️ **Knowledge base appears to be empty!** The AI will attempt to use its general knowledge only.", icon="📚")
+            st.markdown("💡 **Recommendation**: For better results with document context, consider adding research papers in the 'Update Knowledge Base' tab.")
             logger.warning(f"User attempting recommendation with empty knowledge base: '{query[:50]}...'")
+            # Ensure general_mode is turned on automatically since we have no documents to reference
+            general_mode = True
             
             # Still proceed with recommendation attempt
             logger.info(f"Running recommendation for empty-KB query: '{query[:50]}...' with Mode='{mode_name}', Style='{style_name}'")
@@ -829,10 +841,50 @@ st.markdown(
 
 # --- Lazy Load RAG Components Function ---
 def load_rag_components_on_demand():
-    # Ensure this function is defined in your app.py, typically before the UI tabs are created.
-    # It relies on 'project_modules_loaded' (boolean) and 'load_components' (imported from scripts.cli)
-    # being available in its scope.
+    """
+    Load RAG components on demand and check if the knowledge base is empty.
+    This function sets:
+    - st.session_state.rag_components_loaded (bool) - True if components loaded successfully 
+    - st.session_state.knowledge_base_is_empty (bool) - True if knowledge base appears to be empty
+    - st.session_state.rag_components (dict) - The loaded components if successful
+    
+    Even if the knowledge base is empty or components fail to load properly,
+    the UI will still work, showing appropriate warnings but allowing the user
+    to continue with general knowledge mode.
+    """
+    # First, set defaults for important session state variables if they don't exist
+    if 'rag_components_loaded' not in st.session_state:
+        st.session_state.rag_components_loaded = False
+    
+    if 'knowledge_base_is_empty' not in st.session_state:
+        st.session_state.knowledge_base_is_empty = True
+    
+    # Check for data files directly - this is a quick check that can work even if component loading fails
+    kb_files_exist = False
+    try:
+        # Check both data directory paths for maximum compatibility
+        data_paths = [os.path.join(os.getcwd(), "data_hybrid"), os.path.join(os.getcwd(), "data")]
+        for data_path in data_paths:
+            metadata_file = os.path.join(data_path, "combined_metadata.json")
+            if os.path.exists(metadata_file) and os.path.getsize(metadata_file) > 10:  # Ensure file exists and isn't empty
+                with open(metadata_file, 'r', encoding='utf-8') as f:
+                    try:
+                        metadata_content = json.load(f)
+                        if metadata_content and len(metadata_content) > 0:
+                            logger.info(f"APP.PY: load_rag_components_on_demand: Found non-empty metadata file with {len(metadata_content)} items in {metadata_file}")
+                            kb_files_exist = True
+                            break
+                    except json.JSONDecodeError:
+                        logger.warning(f"APP.PY: load_rag_components_on_demand: Failed to parse metadata file at {metadata_file}")
+    except Exception as e:
+        logger.error(f"APP.PY: load_rag_components_on_demand: Error checking data files directly: {e}")
 
+    # Use the file-based check to update session state regardless of component loading
+    if kb_files_exist:
+        st.session_state.knowledge_base_is_empty = False
+        logger.info("APP.PY: load_rag_components_on_demand: Direct file check found knowledge base files.")
+
+    # Now try to load the components properly
     if not st.session_state.get('rag_components_loaded', False):
         logger.info("APP.PY: load_rag_components_on_demand: RAG components not yet loaded or flag is false.")
         if project_modules_loaded and load_components:  # load_components is from cli.py
@@ -844,10 +896,10 @@ def load_rag_components_on_demand():
                     if components is None:
                         logger.error("APP.PY: load_rag_components_on_demand: CRITICAL - load_components() from cli returned None.")
                         st.session_state.rag_components_loaded = False
-                        st.session_state.knowledge_base_is_empty = True # If components are None, KB is effectively unusable
+                        # We don't override knowledge_base_is_empty here, relying on the direct file check above
                         return
 
-                    logger.info(f"APP.PY: load_rag_components_on_demand: load_components() call completed. Checking returned components: {components.keys()}")
+                    logger.info(f"APP.PY: load_rag_components_on_demand: load_components() call completed. Checking returned components: {list(components.keys()) if components else 'no components'}")
                     
                     data_manager_ok = components.get("data_manager") is not None
                     recommender_ok = components.get("recommender") is not None
@@ -863,20 +915,20 @@ def load_rag_components_on_demand():
                             logger.info("APP.PY: load_rag_components_on_demand: Calling data_manager.is_data_empty()...")
                             kb_is_empty = data_manager.is_data_empty() # Call and store result
                             logger.info(f"APP.PY: load_rag_components_on_demand: data_manager.is_data_empty() returned: {kb_is_empty}")
-                            st.session_state.knowledge_base_is_empty = kb_is_empty # Set session state
+                            # Only override the direct file check if data_manager says KB is NOT empty
+                            if not kb_is_empty:
+                                st.session_state.knowledge_base_is_empty = False
                             logger.info(f"APP.PY: load_rag_components_on_demand: st.session_state.knowledge_base_is_empty set to: {st.session_state.knowledge_base_is_empty}")
                         else:
-                            st.session_state.knowledge_base_is_empty = True  # Fallback
-                            logger.warning("APP.PY: load_rag_components_on_demand: DataManager has no 'is_data_empty' method or it's not callable. Assuming KB is empty.")
-                        
+                            logger.warning("APP.PY: load_rag_components_on_demand: DataManager has no 'is_data_empty' method. Relying on direct file check.")
                     else:
                         st.session_state.rag_components_loaded = False
-                        st.session_state.knowledge_base_is_empty = True # If essential components missing, consider KB unusable for RAG
+                        # We don't override knowledge_base_is_empty here, relying on the direct file check above
                         logger.error("APP.PY: load_rag_components_on_demand: load_components() from cli did NOT return all expected components.")
                         logger.error(f"APP.PY: Components received: data_manager: {data_manager_ok}, recommender: {recommender_ok}, llm_interface: {llm_interface_ok}")
                 except Exception as e:
                     st.session_state.rag_components_loaded = False
-                    st.session_state.knowledge_base_is_empty = True # On exception, assume KB is unusable
+                    # We don't override knowledge_base_is_empty here, relying on the direct file check above
                     logger.error(f"APP.PY: load_rag_components_on_demand: Exception during load_components() call or processing: {e}", exc_info=True)
         else:
             if not project_modules_loaded:
@@ -884,8 +936,4 @@ def load_rag_components_on_demand():
             if not load_components:
                 logger.warning("APP.PY: load_rag_components_on_demand: Skipped - load_components (from cli) is not available/imported.")
     else:
-        # If RAG components are already loaded, we might still need to re-check if the KB is empty,
-        # especially if a fetch operation happened without a full page reload.
-        # However, the logic in the "Update Knowledge Base" tab now tries to handle this by setting
-        # rag_components_loaded to False and calling st.rerun().
-        logger.info("APP.PY: load_rag_components_on_demand: RAG components already loaded (rag_components_loaded is True). Knowledge base empty status: {st.session_state.get('knowledge_base_is_empty')}")
+        logger.info(f"APP.PY: load_rag_components_on_demand: RAG components already loaded (rag_components_loaded is True). Knowledge base empty status: {st.session_state.get('knowledge_base_is_empty')}")
