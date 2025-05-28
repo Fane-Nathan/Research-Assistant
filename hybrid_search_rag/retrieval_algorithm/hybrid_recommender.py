@@ -401,16 +401,35 @@ class HybridRecommender:
             if 0 <= doc_index < num_docs_in_corpus: # Use num_docs_in_corpus consistently
                 metadata_item = resource_metadata[doc_index]
                 
-                # CRITICAL CHECK: Ensure either 'entry_id' or 'arxiv_entry_id' key exists in the metadata item
-                # Handle both 'entry_id' and 'arxiv_entry_id' for backward compatibility
-                if 'entry_id' not in metadata_item and 'arxiv_entry_id' not in metadata_item:
-                    logger.error(f"Document at index {doc_index} in resource_metadata is missing both \\'entry_id\\' and \\'arxiv_entry_id\\' keys. Metadata: {metadata_item}. Skipping this item.")
-                    continue # Skip this item as it cannot be processed correctly downstream
+                # CRITICAL CHECK: Ensure either 'entry_id' or 'arxiv_entry_id' key exists, or try to derive from URL
+                entry_id = metadata_item.get('entry_id')
+                arxiv_entry_id = metadata_item.get('arxiv_entry_id')
+                doc_url = metadata_item.get('url')
+
+                if not entry_id and not arxiv_entry_id:
+                    if doc_url and isinstance(doc_url, str):
+                        # Attempt to derive an ID from the URL
+                        try:
+                            # Example: 'http://arxiv.org/pdf/2410.12837v1' -> '2410.12837v1'
+                            derived_id = doc_url.split('/')[-1]
+                            if derived_id:
+                                logger.warning(f"Document at index {doc_index} missing 'entry_id' and 'arxiv_entry_id'. Using derived ID '{derived_id}' from URL: {doc_url}")
+                                metadata_item['entry_id'] = derived_id # Add the derived ID to the metadata
+                                entry_id = derived_id # Use it for current processing
+                            else:
+                                logger.error(f"Document at index {doc_index} in resource_metadata is missing 'entry_id', 'arxiv_entry_id', and could not derive a valid ID from URL '{doc_url}'. Metadata: {metadata_item}. Skipping this item.")
+                                continue
+                        except Exception as e:
+                            logger.error(f"Error deriving ID from URL '{doc_url}' for document at index {doc_index}. Metadata: {metadata_item}. Error: {e}. Skipping this item.")
+                            continue
+                    else:
+                        logger.error(f"Document at index {doc_index} in resource_metadata is missing 'entry_id', 'arxiv_entry_id', and has no valid 'url' to derive an ID. Metadata: {metadata_item}. Skipping this item.")
+                        continue # Skip this item as it cannot be processed correctly downstream
 
                 # Use entry_id if available, otherwise fall back to arxiv_entry_id
-                doc_id_for_log = metadata_item.get('entry_id') or metadata_item.get('arxiv_entry_id', f"[No ID at index {doc_index}]")
+                doc_id_for_log = entry_id or arxiv_entry_id or f"[No ID at index {doc_index}]" # Updated to include derived ID possibility
                 title_for_log = metadata_item.get('title', f"[No Title - ID: {doc_id_for_log}]")
-                logger.debug(f"  Considering doc index {doc_index} (ID: {doc_id_for_log}, Title: \'{title_for_log}\') with RRF score {score:.4f}")
+                logger.debug(f"  Considering doc index {doc_index} (ID: {doc_id_for_log}, Title: \\\'{title_for_log}\\\') with RRF score {score:.4f}")
                 final_recommendations.append((metadata_item, score))
             else:
                 logger.warning(f"Document index {doc_index} from fused results is out of bounds for resource_metadata (len: {num_docs_in_corpus}). Skipping.")

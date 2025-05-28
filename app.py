@@ -383,20 +383,22 @@ with tab_rec:
     # --- Display Results Section (WITH DEBUGGING from previous step) ---
     if st.session_state.get("llm_answer"):
         st.markdown("---")
-        st.markdown("### 🎯 Recommendation Result")
+        # st.markdown("### 🎯 Recommendation Result")
 
-        # Display the main answer (current method)
-        st.markdown("**Answer (formatted via st.markdown):**")
-        st.markdown(st.session_state.llm_answer, unsafe_allow_html=True)
+        # # Display the main answer (current method)
+        # st.markdown("**Answer:**") # Simplified title
+        # The following line is removed to prevent duplicate display of the answer,
+        # as the answer_placeholder handles rendering the answer text.
+        # st.markdown(st.session_state.llm_answer, unsafe_allow_html=True)
 
         # --- DEBUGGING LINES (kept from previous modification) ---
-        st.markdown("---")
-        st.markdown("**DEBUG: Answer (displayed as raw text via st.text):**")
-        st.text(st.session_state.llm_answer)
+        # st.markdown("---") # Removed
+        # st.markdown("**DEBUG: Answer (displayed as raw text via st.text):**") # Removed
+        # st.text(st.session_state.llm_answer) # Removed
 
-        st.markdown("---")
-        st.markdown("**DEBUG: Answer (displayed in a code block via st.code):**")
-        st.code(str(st.session_state.llm_answer), language=None)
+        # st.markdown("---") # Removed
+        # st.markdown("**DEBUG: Answer (displayed in a code block via st.code):**") # Removed
+        # st.code(str(st.session_state.llm_answer), language=None) # Removed
         # --- END DEBUGGING LINES ---
 
         # Display context sources if available

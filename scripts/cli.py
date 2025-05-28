@@ -40,7 +40,8 @@ try:
     from hybrid_search_rag.data_handling.resource_fetcher import (
         fetch_arxiv_papers,
         crawl_and_fetch_web_articles,
-        PLAYWRIGHT_AVAILABLE # Import for checking
+        PLAYWRIGHT_AVAILABLE, # Import for checking
+        ResourceFetcher # Added ResourceFetcher
     )
     from hybrid_search_rag.embedding_services.gemini_embedder import EmbeddingModel
     from hybrid_search_rag.data_handling.data_manager import DataManager
@@ -270,31 +271,76 @@ Provide *only* the queries and URLs in the specified format.'''
     logger.info(f"Fetching: arXiv query='{arxiv_query}' (max={max_results}), URLs={len(target_urls)}")
     
     arxiv_metadata_list: List[Dict[str, Any]] = []
+    web_metadata_list: List[Dict[str, Any]] = [] # Initialize web_metadata_list
+    resource_fetcher_instance = None  # Initialize instance
 
     try:
+        # Initialize ResourceFetcher
+        # It will try to set up sync Playwright if use_playwright_for_pdfs is True (default)
+        resource_fetcher_instance = ResourceFetcher(use_playwright_for_pdfs=True)
+
         # Enable PDF fetching for arXiv - now uses direct HTTP requests, no Playwright needed
-        should_fetch_arxiv_pdfs = True 
-        logger.info("arXiv PDF fetching enabled (using direct HTTP requests)")
+        # The should_fetch_arxiv_pdfs variable is not used by fetch_arxiv_papers anymore.
+        # fetch_arxiv_papers now only returns metadata including 'pdf_url'.
+        # The actual PDF content fetching will be done later using the ResourceFetcher instance.
+        logger.info("arXiv PDF metadata fetching enabled.")
 
         if arxiv_query and max_results > 0:
             try:
-                arxiv_metadata_list = await fetch_arxiv_papers(
+                # fetch_arxiv_papers now only gets metadata, not the PDF content directly.
+                arxiv_metadata_list_with_potential_pdfs = await fetch_arxiv_papers(
                     query=arxiv_query,
                     max_results=max_results,
-                    fetch_pdfs=should_fetch_arxiv_pdfs,
                     verbose=args.debug # Pass debug flag for verbose logging in fetcher
                 )
+                # Now, iterate and fetch PDF content if pdf_url is present
+                processed_arxiv_docs = []
+                for paper_meta in arxiv_metadata_list_with_potential_pdfs:
+                    if paper_meta.get('pdf_url'):
+                        logger.info(f"Attempting to fetch PDF content for: {paper_meta.get('title')} from {paper_meta.get('pdf_url')}")
+                        # Use ResourceFetcher.fetch_document for PDF
+                        # fetch_document is async, so await it.
+                        # It handles the sync playwright call in a thread.
+                        fetched_doc_data = await resource_fetcher_instance.fetch_document(
+                            url=paper_meta['pdf_url'], 
+                            source='arxiv', 
+                            is_arxiv_pdf_link=True
+                        )
+                        if fetched_doc_data and fetched_doc_data.get('text'):
+                            # Update the original metadata with the fetched text content
+                            paper_meta['content'] = fetched_doc_data['text']
+                            paper_meta['content_type'] = 'pdf' # Mark as PDF content
+                            processed_arxiv_docs.append(paper_meta)
+                            logger.info(f"Successfully fetched and processed PDF for: {paper_meta.get('title')}")
+                        else:
+                            logger.warning(f"Failed to fetch/process PDF for: {paper_meta.get('title')} from {paper_meta.get('pdf_url')}")
+                            # Optionally, still add metadata even if PDF fetch failed, but without content
+                            paper_meta['content'] = None # Ensure content is None
+                            processed_arxiv_docs.append(paper_meta)
+                    else:
+                        logger.warning(f"No PDF URL for arXiv entry: {paper_meta.get('title')}. Skipping PDF fetch.")
+                        paper_meta['content'] = None # Ensure content is None
+                        processed_arxiv_docs.append(paper_meta)
+                arxiv_metadata_list = processed_arxiv_docs
+
             except Exception as arxiv_e:
-                logger.error(f"arXiv fetching failed: {arxiv_e}", exc_info=True)
-                status_messages.append(f"Warning: arXiv fetching failed ({arxiv_e}).")
+                logger.error(f"arXiv processing failed: {arxiv_e}", exc_info=True)
+                status_messages.append(f"Warning: arXiv processing failed ({arxiv_e}).")
                 arxiv_metadata_list = []
         else:
             arxiv_metadata_list = []
 
-        web_metadata_list: List[Dict[str, Any]] = []
+        # web_metadata_list: List[Dict[str, Any]] = [] # Moved initialization up
         if target_urls:
             try:
-                web_metadata_list = await crawl_and_fetch_web_articles(target_urls, process_pdfs_linked=True, max_pages_override=args.num_web_pages if hasattr(args, 'num_web_pages') else None)
+                # Assuming crawl_and_fetch_web_articles is updated to use ResourceFetcher internally
+                # or that it returns metadata that then needs content fetching similar to arXiv.
+                # For now, if it returns content directly, it's fine. If not, similar logic to above is needed.
+                web_metadata_list = await crawl_and_fetch_web_articles(
+                    start_urls=target_urls, 
+                    process_pdfs_linked=True, 
+                    max_pages_override=args.num_web_pages if hasattr(args, 'num_web_pages') else None
+                )
             except Exception as web_e:
                  logger.error(f"Web crawling failed: {web_e}", exc_info=True)
                  status_messages.append(f"Warning: Web crawling failed ({web_e}).")
@@ -304,6 +350,8 @@ Provide *only* the queries and URLs in the specified format.'''
             web_metadata_list = []
 
     finally: # Ensure resource cleanup
+        if resource_fetcher_instance:
+            resource_fetcher_instance.close() # Close Playwright resources
         logger.info("Completed data fetching process.")
 
     original_documents = arxiv_metadata_list + web_metadata_list
