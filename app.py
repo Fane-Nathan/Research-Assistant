@@ -377,24 +377,32 @@ with tab_rec:
             "✨ Get Recommendation",
             type="primary",
             key="rec_button",
-            disabled=not components_loaded_status or not query,
+            disabled=not query, # Only disable if query is empty, allow even with empty knowledge base
             use_container_width=True
         )
         
         # Show helpful guidance when knowledge base is empty
-        if not components_loaded_status:
+        if not components_loaded_status or (hasattr(st.session_state, 'knowledge_base_is_empty') and st.session_state.knowledge_base_is_empty):
             st.caption("💡 **Knowledge base is empty** - Add research papers in the 'Update Knowledge Base' tab to get started!")
 
     if submit_rec:
+        # Always save the user's query and preferences regardless of knowledge base status
+        st.session_state.rec_query = query
+        st.session_state.rec_general = general_mode
+        st.session_state.rec_concise = concise_mode
+        mode_name = "Hybrid" if general_mode else "Strict"
+        style_name = "Concise" if concise_mode else "Detailed"
+        
         if not components_loaded_status:
-            st.info("🎯 **Get started by adding research papers!** Please use the **'Update Knowledge Base'** tab to add some papers first. Once you have content in your knowledge base, you'll be able to ask questions here.", icon="💡")
-            st.markdown("📚 **Quick tip:** Try searching for topics like 'machine learning', 'artificial intelligence', or your specific research area in the Update Knowledge Base tab.")
+            # Allow proceeding with empty knowledge base, but show warning
+            st.warning("⚠️ **Knowledge base appears to be empty!** The AI will attempt to use its general knowledge, but without any specific research papers to reference.", icon="📚")
+            st.markdown("💡 **Recommendation**: For better results, consider adding research papers in the 'Update Knowledge Base' tab.")
+            logger.warning(f"User attempting recommendation with empty knowledge base: '{query[:50]}...'")
+            
+            # Still proceed with recommendation attempt
+            logger.info(f"Running recommendation for empty-KB query: '{query[:50]}...' with Mode='{mode_name}', Style='{style_name}'")
+            st.info(f"Running recommendation with '{mode_name}' RAG and '{style_name}' Prompt... (Note: Empty knowledge base)", icon="⏳")
         else:
-            st.session_state.rec_query = query
-            st.session_state.rec_general = general_mode
-            st.session_state.rec_concise = concise_mode
-            mode_name = "Hybrid" if general_mode else "Strict"
-            style_name = "Concise" if concise_mode else "Detailed"
             logger.info(f"Running recommendation for query: '{query[:50]}...' with Mode='{mode_name}', Style='{style_name}'")
             st.info(f"Running recommendation with '{mode_name}' RAG and '{style_name}' Prompt...", icon="⏳")
 
