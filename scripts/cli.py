@@ -67,17 +67,34 @@ _nltk_data_checked_cli_status: Optional[bool] = None
 def check_nltk_data() -> bool:
     """
     Checks for required NLTK data packages ('punkt', 'stopwords').
-    Attempts to download them if missing.
+    Attempts to download them if missing to a project-local directory.
     For 'punkt', it specifically tests nltk.sent_tokenize.
     Returns True if all packages are verified and usable, False otherwise.
     """
     global _nltk_data_checked_cli_status
-    # If previously checked and successful, return True.
-    # If previously failed, allow re-attempt (by not returning False immediately based on flag).
     if _nltk_data_checked_cli_status is True:
         return True
 
     logger.info("Performing NLTK data check (CLI version)...")
+
+    # --- NLTK Data Path Setup ---
+    # project_root is defined globally in this script
+    nltk_data_dir = os.path.join(project_root, "nltk_data_ra")
+    try:
+        if not os.path.exists(nltk_data_dir):
+            os.makedirs(nltk_data_dir)
+            logger.info(f"Created NLTK data directory: {nltk_data_dir}")
+        if nltk_data_dir not in nltk.data.path:
+            nltk.data.path.insert(0, nltk_data_dir)
+            logger.info(f"Prepended {nltk_data_dir} to nltk.data.path.")
+        logger.info(f"Current nltk.data.path: {nltk.data.path}")
+    except Exception as e_path:
+        logger.error(f"Failed to setup NLTK data directory {nltk_data_dir}: {e_path}", exc_info=True)
+        # If path setup fails, it's risky to proceed with downloads to unknown locations.
+        _nltk_data_checked_cli_status = False
+        return False
+    # --- End NLTK Data Path Setup ---
+
     required_nltk_packages = ["punkt", "stopwords"]
     all_packages_ok = True
 
@@ -102,10 +119,10 @@ def check_nltk_data() -> bool:
                  raise LookupError(f"Initial check for {package_name} passed but verification logic failed.")
 
         except LookupError:
-            logger.warning(f"NLTK package '{package_name}' not found or initial test failed. Attempting download...")
+            logger.warning(f"NLTK package '{package_name}' not found or initial test failed. Attempting download to {nltk_data_dir}...")
             try:
-                nltk.download(package_name, quiet=True)
-                logger.info(f"NLTK package '{package_name}' downloaded.")
+                nltk.download(package_name, download_dir=nltk_data_dir, quiet=True)
+                logger.info(f"NLTK package '{package_name}' downloaded to {nltk_data_dir}.")
                 # Re-verify after download
                 if package_name == "punkt":
                     nltk.data.find("tokenizers/punkt/PY3/english.pickle") # Re-check pickle
