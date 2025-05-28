@@ -116,11 +116,16 @@ def check_nltk_data() -> bool:
                 package_verified = True
             
             if not package_verified: # Should not happen if above checks pass without LookupError
-                 raise LookupError(f"Initial check for {package_name} passed but verification logic failed.")
-
-        except LookupError:
+                 raise LookupError(f"Initial check for {package_name} passed but verification logic failed.")        except LookupError as e:
             logger.warning(f"NLTK package '{package_name}' not found or initial test failed. Attempting download to {nltk_data_dir}...")
             try:
+                # Try downloading punkt_tab first if the error mentions it
+                if "punkt_tab" in str(e):
+                    logger.info(f"LookupError mentions 'punkt_tab', attempting to download 'punkt_tab' first...")
+                    nltk.download('punkt_tab', download_dir=nltk_data_dir, quiet=True)
+                    logger.info(f"NLTK package 'punkt_tab' downloaded to {nltk_data_dir}.")
+                
+                # Always try the original package too
                 nltk.download(package_name, download_dir=nltk_data_dir, quiet=True)
                 logger.info(f"NLTK package '{package_name}' downloaded to {nltk_data_dir}.")
                 # Re-verify after download
