@@ -809,3 +809,70 @@ st.markdown(
     unsafe_allow_html=True
 )
 # --- End Footer ---
+
+# --- Lazy Load RAG Components Function ---
+def load_rag_components_on_demand():
+    # Ensure this function is defined in your app.py, typically before the UI tabs are created.
+    # It relies on 'project_modules_loaded' (boolean) and 'load_components' (imported from scripts.cli)
+    # being available in its scope.
+
+    if not st.session_state.get('rag_components_loaded', False):
+        logger.info("APP.PY: load_rag_components_on_demand: RAG components not yet loaded or flag is false.")
+        if project_modules_loaded and load_components:  # load_components is from cli.py
+            with st.spinner("Loading RAG components... This might take a moment."):
+                try:
+                    logger.info("APP.PY: load_rag_components_on_demand: Attempting to call load_components() from cli.")
+                    components = load_components()  # Actual call to scripts.cli.load_components()
+                    
+                    if components is None:
+                        logger.error("APP.PY: load_rag_components_on_demand: CRITICAL - load_components() from cli returned None.")
+                        st.session_state.rag_components_loaded = False
+                        # Consider adding an st.error() here if not handled by calling code
+                        return # Exit early if components are None
+
+                    logger.info(f"APP.PY: load_rag_components_on_demand: load_components() call completed. Checking returned components.")
+                    
+                    # Check for essential components
+                    data_manager_ok = components.get("data_manager") is not None
+                    recommender_ok = components.get("recommender") is not None
+                    llm_interface_ok = components.get("llm_interface") is not None
+
+                    if data_manager_ok and recommender_ok and llm_interface_ok:
+                        st.session_state.rag_components = components
+                        st.session_state.rag_components_loaded = True
+                        logger.info("APP.PY: load_rag_components_on_demand: All essential RAG components loaded and stored in session state.")
+
+                        data_manager = components["data_manager"]
+                        if hasattr(data_manager, 'is_data_empty') and callable(data_manager.is_data_empty):
+                            st.session_state.knowledge_base_is_empty = data_manager.is_data_empty()
+                            logger.info(f"APP.PY: load_rag_components_on_demand: Knowledge base empty status: {st.session_state.knowledge_base_is_empty}")
+                        else:
+                            st.session_state.knowledge_base_is_empty = True  # Fallback
+                            logger.warning("APP.PY: load_rag_components_on_demand: DataManager has no 'is_data_empty' method. Assuming KB is empty.")
+                        
+                        # st.success("RAG Components Loaded!") # You might want this feedback
+                        # st.rerun() # Use st.rerun() cautiously; it can cause loops if not managed.
+                                   # It's often better to let Streamlit's natural flow update the UI.
+                    else:
+                        st.session_state.rag_components_loaded = False
+                        logger.error("APP.PY: load_rag_components_on_demand: load_components() from cli did NOT return all expected components.")
+                        logger.error(f"APP.PY: Components received: data_manager: {data_manager_ok}, recommender: {recommender_ok}, llm_interface: {llm_interface_ok}")
+                        # An st.error might be appropriate here or in the UI logic that checks rag_components_loaded
+                except Exception as e:
+                    st.session_state.rag_components_loaded = False
+                    logger.error(f"APP.PY: load_rag_components_on_demand: Exception during load_components() call or processing: {e}", exc_info=True)
+                    # An st.error might be appropriate here
+        else:
+            if not project_modules_loaded:
+                logger.warning("APP.PY: load_rag_components_on_demand: Skipped - project_modules_loaded is False.")
+            if not load_components: # Should be 'load_components' not 'load_components_function_present'
+                logger.warning("APP.PY: load_rag_components_on_demand: Skipped - load_components (from cli) is not available/imported.")
+    else:
+        logger.info("APP.PY: load_rag_components_on_demand: RAG components already loaded (rag_components_loaded is True).")
+
+# Ensure this function is called appropriately in your app, for example,
+# at the beginning of the "Recommend" tab, or once after initial app setup checks.
+# Example call pattern (if you have tabs):
+# if selected_tab == "Recommend":
+#     load_rag_components_on_demand()
+#     # ... rest of the Recommend tab UI that depends on components being loaded ...
