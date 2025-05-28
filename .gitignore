@@ -173,3 +173,11 @@ finetune/logs/
 logs_arxiv_collection/
 scripts/output_data_*/
 scripts/logs_*/
+
+# Temporary test files and logs
+test_*.py
+final_*.py
+*verification*.py
+app.log
+*.log.txt
+logs-*.txt

@@ -196,3 +196,72 @@ For detailed information about the project organization and file structure, see 
 * NumPy
 * Requests
 * BeautifulSoup4
+
+## Deployment
+
+### Streamlit Cloud Deployment
+
+The Research Assistant includes a Streamlit web interface (`app.py`) that can be deployed to Streamlit Cloud.
+
+**Prerequisites:**
+- GitHub repository with your code
+- API keys for LLM providers (Google, Groq, DeepSeek)
+
+**Deployment Files:**
+- `requirements_streamlit.txt` - Optimized dependencies for cloud deployment
+- `packages_streamlit.txt` - Minimal system packages
+- `STREAMLIT_DEPLOYMENT.md` - Comprehensive deployment guide
+
+**Quick Deployment Steps:**
+1. Commit all changes to GitHub
+2. Go to [share.streamlit.io](https://share.streamlit.io)
+3. Connect your repository
+4. Configure:
+   - Main file: `app.py`
+   - Python version: 3.11
+   - Requirements: `requirements_streamlit.txt`
+   - Packages: `packages_streamlit.txt`
+5. Add API keys in Streamlit secrets
+6. Deploy!
+
+**Deployment Verification:**
+Run the deployment verification script to ensure everything is ready:
+```bash
+python deployment_verification.py
+```
+
+### Local Development
+
+For local development, use the full requirements:
+```bash
+pip install -r requirements.txt
+```
+
+For Streamlit Cloud deployment, use the optimized requirements:
+```bash
+pip install -r requirements_streamlit.txt
+```
+
+## Testing
+
+The project includes comprehensive tests organized in the `tests/` directory:
+
+**Test Structure:**
+- `tests/unit/` - Unit tests for individual components
+- `tests/rag_tests/` - Integration tests for RAG functionality
+- `deployment_verification.py` - Deployment readiness verification
+
+**Running Tests:**
+```bash
+# Run all unit tests
+python -m pytest tests/unit/
+
+# Run RAG tests
+python -m pytest tests/rag_tests/
+
+# Verify deployment readiness
+python deployment_verification.py
+
+# Run specific test
+python -m pytest tests/unit/test_document_management.py -v
+```
