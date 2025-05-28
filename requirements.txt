@@ -1,4 +1,5 @@
 # Streamlit Cloud Optimized Requirements
+# Core essentials only - remove heavyweight ML libraries for cloud deployment
 
 # Core Data Processing (lightweight)
 numpy>=1.21.0,<2.0.0

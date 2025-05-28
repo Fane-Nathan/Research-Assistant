@@ -21,8 +21,19 @@ from urllib.parse import urlparse # Added for title extraction
 
 import fitz  # PyMuPDF
 from bs4 import BeautifulSoup
-from playwright.sync_api import sync_playwright, Error as PlaywrightSyncError # Import PlaywrightSyncError
-from playwright.async_api import async_playwright, Error as PlaywrightAsyncError 
+
+# Conditional Playwright imports to support deployment environments without Playwright
+try:
+    from playwright.sync_api import sync_playwright, Error as PlaywrightSyncError
+    from playwright.async_api import async_playwright, Error as PlaywrightAsyncError
+    PLAYWRIGHT_AVAILABLE = True
+except ImportError:
+    # Playwright not available - this is expected in some deployment environments
+    sync_playwright = None
+    async_playwright = None
+    PlaywrightSyncError = Exception
+    PlaywrightAsyncError = Exception
+    PLAYWRIGHT_AVAILABLE = False
 
 # Imports that were missing or causing issues
 import aiohttp 
@@ -41,15 +52,11 @@ MAX_PAGES_TO_CRAWL_CONFIG = 100 # For crawl_and_fetch_web_articles (even if stub
 # --- Module-Level Logger ---
 _module_logger = logging.getLogger(__name__)
 
-# --- Check Playwright Availability (for async part, primarily) ---
-PLAYWRIGHT_AVAILABLE = False
-try:
-    # async_playwright and PlaywrightAsyncError are already imported
-    PLAYWRIGHT_AVAILABLE = True
+# Log Playwright availability (already determined above)
+if PLAYWRIGHT_AVAILABLE:
     _module_logger.info("Async Playwright API is available.")
-except ImportError:
-    _module_logger.warning("Playwright async_api not found. Web crawling features requiring it will be limited.")
-    # PlaywrightAsyncError is aliased, so it's defined.
+else:
+    _module_logger.warning("Playwright not found. Web crawling features requiring it will be limited.")
 
 # --- Helper function for User Agent (if needed by async part) ---
 def get_user_agent() -> str: 
@@ -158,6 +165,11 @@ class ResourceFetcher:
     def _init_playwright_sync(self):
         """Initialize synchronous Playwright instance, browser, and context."""
         if self._playwright_init_attempted:
+            return
+        
+        if not PLAYWRIGHT_AVAILABLE:
+            self.logger.warning("ResourceFetcher._init_playwright_sync - Playwright not available. Skipping initialization.")
+            self._playwright_init_attempted = True
             return
         
         self._playwright_init_attempted = True
