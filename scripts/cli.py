@@ -114,9 +114,10 @@ def check_nltk_data() -> bool:
                 logger.info(f"NLTK package '{package_name}' (english stopwords) found.")
                 # Optionally, load them: from nltk.corpus import stopwords; stopwords.words('english')
                 package_verified = True
-            
             if not package_verified: # Should not happen if above checks pass without LookupError
-                 raise LookupError(f"Initial check for {package_name} passed but verification logic failed.")        except LookupError as e:
+                raise LookupError(f"Initial check for {package_name} passed but verification logic failed.")
+
+        except LookupError as e:
             logger.warning(f"NLTK package '{package_name}' not found or initial test failed. Attempting download to {nltk_data_dir}...")
             try:
                 # Try downloading punkt_tab first if the error mentions it
