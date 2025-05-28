@@ -317,6 +317,15 @@ if not components_loaded_status and project_modules_loaded:
     st.markdown("💡 **Tip:** Try searching for topics like 'machine learning', 'quantum computing', or 'artificial intelligence' to build your initial knowledge base.")
 
 
+# --- Main Application UI ---
+# Initialize session state variables if they don't exist
+if 'knowledge_base_is_empty' not in st.session_state:
+    st.session_state.knowledge_base_is_empty = True # Default to true
+if 'rag_components_loaded' not in st.session_state:
+    st.session_state.rag_components_loaded = False
+if 'recommendation_processing' not in st.session_state:
+    st.session_state.recommendation_processing = False
+
 # --- UI Tabs (with Icons) ---
 logger.info("Defining UI tabs...")
 tab_rec, tab_how, tab_about, tab_fetch, tab_arxiv, tab_feedback = st.tabs([
@@ -827,12 +836,11 @@ def load_rag_components_on_demand():
                     if components is None:
                         logger.error("APP.PY: load_rag_components_on_demand: CRITICAL - load_components() from cli returned None.")
                         st.session_state.rag_components_loaded = False
-                        # Consider adding an st.error() here if not handled by calling code
-                        return # Exit early if components are None
+                        st.session_state.knowledge_base_is_empty = True # If components are None, KB is effectively unusable
+                        return
 
-                    logger.info(f"APP.PY: load_rag_components_on_demand: load_components() call completed. Checking returned components.")
+                    logger.info(f"APP.PY: load_rag_components_on_demand: load_components() call completed. Checking returned components: {components.keys()}")
                     
-                    # Check for essential components
                     data_manager_ok = components.get("data_manager") is not None
                     recommender_ok = components.get("recommender") is not None
                     llm_interface_ok = components.get("llm_interface") is not None
@@ -844,35 +852,32 @@ def load_rag_components_on_demand():
 
                         data_manager = components["data_manager"]
                         if hasattr(data_manager, 'is_data_empty') and callable(data_manager.is_data_empty):
-                            st.session_state.knowledge_base_is_empty = data_manager.is_data_empty()
-                            logger.info(f"APP.PY: load_rag_components_on_demand: Knowledge base empty status: {st.session_state.knowledge_base_is_empty}")
+                            logger.info("APP.PY: load_rag_components_on_demand: Calling data_manager.is_data_empty()...")
+                            kb_is_empty = data_manager.is_data_empty() # Call and store result
+                            logger.info(f"APP.PY: load_rag_components_on_demand: data_manager.is_data_empty() returned: {kb_is_empty}")
+                            st.session_state.knowledge_base_is_empty = kb_is_empty # Set session state
+                            logger.info(f"APP.PY: load_rag_components_on_demand: st.session_state.knowledge_base_is_empty set to: {st.session_state.knowledge_base_is_empty}")
                         else:
                             st.session_state.knowledge_base_is_empty = True  # Fallback
-                            logger.warning("APP.PY: load_rag_components_on_demand: DataManager has no 'is_data_empty' method. Assuming KB is empty.")
+                            logger.warning("APP.PY: load_rag_components_on_demand: DataManager has no 'is_data_empty' method or it's not callable. Assuming KB is empty.")
                         
-                        # st.success("RAG Components Loaded!") # You might want this feedback
-                        # st.rerun() # Use st.rerun() cautiously; it can cause loops if not managed.
-                                   # It's often better to let Streamlit's natural flow update the UI.
                     else:
                         st.session_state.rag_components_loaded = False
+                        st.session_state.knowledge_base_is_empty = True # If essential components missing, consider KB unusable for RAG
                         logger.error("APP.PY: load_rag_components_on_demand: load_components() from cli did NOT return all expected components.")
                         logger.error(f"APP.PY: Components received: data_manager: {data_manager_ok}, recommender: {recommender_ok}, llm_interface: {llm_interface_ok}")
-                        # An st.error might be appropriate here or in the UI logic that checks rag_components_loaded
                 except Exception as e:
                     st.session_state.rag_components_loaded = False
+                    st.session_state.knowledge_base_is_empty = True # On exception, assume KB is unusable
                     logger.error(f"APP.PY: load_rag_components_on_demand: Exception during load_components() call or processing: {e}", exc_info=True)
-                    # An st.error might be appropriate here
         else:
             if not project_modules_loaded:
                 logger.warning("APP.PY: load_rag_components_on_demand: Skipped - project_modules_loaded is False.")
-            if not load_components: # Should be 'load_components' not 'load_components_function_present'
+            if not load_components:
                 logger.warning("APP.PY: load_rag_components_on_demand: Skipped - load_components (from cli) is not available/imported.")
     else:
-        logger.info("APP.PY: load_rag_components_on_demand: RAG components already loaded (rag_components_loaded is True).")
-
-# Ensure this function is called appropriately in your app, for example,
-# at the beginning of the "Recommend" tab, or once after initial app setup checks.
-# Example call pattern (if you have tabs):
-# if selected_tab == "Recommend":
-#     load_rag_components_on_demand()
-#     # ... rest of the Recommend tab UI that depends on components being loaded ...
+        # If RAG components are already loaded, we might still need to re-check if the KB is empty,
+        # especially if a fetch operation happened without a full page reload.
+        # However, the logic in the "Update Knowledge Base" tab now tries to handle this by setting
+        # rag_components_loaded to False and calling st.rerun().
+        logger.info("APP.PY: load_rag_components_on_demand: RAG components already loaded (rag_components_loaded is True). Knowledge base empty status: {st.session_state.get('knowledge_base_is_empty')}")
