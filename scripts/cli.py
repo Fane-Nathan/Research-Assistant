@@ -666,21 +666,45 @@ async def run_recommendation(query: str, num_final_results: int, general_mode: b
         if kb_is_empty:
             context_string = "The knowledge base is empty. No document chunks are available for context."
             logger.info("Knowledge base is empty - proceeding with empty context.")
-        else:
-            context_string = "No relevant document chunks were found in the local data."
+        else:            context_string = "No relevant document chunks were found in the local data."
         
         reference_map = {}
         if hybrid_results:
             top_chunks_for_rag = hybrid_results[:config.RAG_NUM_DOCS]
-            raw_context_chunks_list = [chunk_meta for chunk_meta, _ in top_chunks_for_rag]
+            raw_context_chunks_list = []
             context_texts = []
-            for i, chunk_meta in enumerate(raw_context_chunks_list):
+            for i, (chunk_meta, _) in enumerate(top_chunks_for_rag):
                  chunk_num = i + 1
                  title = chunk_meta.get('original_title', 'N/A')
                  url = chunk_meta.get('original_url', '#')
-                 snippet = (chunk_meta.get('chunk_text', '') or '')[:config.MAX_CONTEXT_LENGTH_PER_DOC]
+                 chunk_text = chunk_meta.get('chunk_text', '')
+                 snippet = (chunk_text or '')[:config.MAX_CONTEXT_LENGTH_PER_DOC]
+                   # Create a copy of the chunk metadata and add a 'content' key for the UI
+                 chunk_meta_copy = chunk_meta.copy()
+                 chunk_meta_copy['content'] = chunk_text  # Add 'content' key that maps to 'chunk_text'
+                 # Add metadata for the UI
+                 if 'metadata' not in chunk_meta_copy:
+                     chunk_meta_copy['metadata'] = {
+                         'title': title,
+                         'url': url,
+                         'page_number': chunk_meta.get('page_number', 'N/A')
+                     }
+                 
+                 raw_context_chunks_list.append(chunk_meta_copy)
                  context_texts.append(f"Source [{chunk_num}]:Title: {title} URL: {url} Content Snippet: {snippet}")
                  reference_map[chunk_num] = f"{title} (URL: {url})"
+            
+            # Log context chunk structure for debugging
+            if raw_context_chunks_list:
+                sample_keys = list(raw_context_chunks_list[0].keys())
+                logger.info(f"Context chunk structure - keys available: {sample_keys}")
+                if 'content' in sample_keys:
+                    logger.info("'content' key is present in context chunks")
+                else:
+                    logger.warning("'content' key is NOT present in context chunks")
+                if 'metadata' in sample_keys:
+                    logger.info(f"'metadata' keys: {list(raw_context_chunks_list[0].get('metadata', {}).keys())}")
+            
             context_string = "\n---\n".join(context_texts) # Use newline and --- for separation
             formatted_source_list = [f"[{num}] {details}" for num, details in reference_map.items()]
             logger.info(f"Prepared context from {len(raw_context_chunks_list)} chunks.")

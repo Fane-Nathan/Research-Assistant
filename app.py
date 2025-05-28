@@ -466,17 +466,28 @@ with tab_rec:
         if not st.session_state.recommendation_processing and st.session_state.llm_answer:
             if st.session_state.raw_context_chunks: # Changed from context_sources
                 with st.expander(f"📚 Retrieved Context ({len(st.session_state.raw_context_chunks)})", expanded=False): # Changed from context_sources
+                    # Add debug info if no content is found
+                    content_found = False
                     for i, source_item in enumerate(st.session_state.raw_context_chunks): # Changed from context_sources
                         st.markdown(f"**Source {i+1}:**") # Changed to i+1 for 1-based indexing
-                        content = source_item.get('content', 'N/A')
+                        content = source_item.get('content', source_item.get('chunk_text', 'N/A'))
+                        if content != 'N/A':
+                            content_found = True
                         metadata = source_item.get('metadata', {})
-                        title = metadata.get('title', 'Unknown Title')
+                        title = metadata.get('title', source_item.get('original_title', 'Unknown Title'))
                         page_num = metadata.get('page_number', 'N/A') 
-                        url = metadata.get('url', '#')
+                        url = metadata.get('url', source_item.get('original_url', '#'))
 
                         st.text(content[:500] + "..." if len(content) > 500 else content)
                         st.caption(f"📄 {title} | Page: {page_num} | URL: {url}")
                         st.markdown("---")
+                        
+                    # Show debug information if needed
+                    if not content_found and st.session_state.raw_context_chunks:
+                        with st.expander("🔍 Debug Information", expanded=False):
+                            st.write("No content was found in the retrieved chunks. Here are the available keys:")
+                            sample_chunk = st.session_state.raw_context_chunks[0]
+                            st.json(list(sample_chunk.keys()))
         
         if st.button("🗑️ Clear Results", key="clear_rec_results_button_main_display"):
             st.session_state.llm_answer = None
