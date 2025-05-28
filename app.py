@@ -106,12 +106,12 @@ try:
     project_modules_loaded = True
     logger.info("Project module imports successful.")
 except ImportError as e:
-    st.error(f"Failed to import project modules (ImportError). Check setup and ensure scripts/cli.py and hybrid_search_rag package are accessible. Error: {e}")
+    st.error("🔧 **System setup incomplete.** Please ensure all required components are properly installed and refresh the page. If the issue persists, check the installation guide or contact support.", icon="📋")
     st.code(f"Current sys.path: {sys.path}")
     logger.error(f"Project import failed (ImportError): {e}", exc_info=True)
 except Exception as e:
     # Catch other errors during import
-    st.error(f"Unexpected error during project imports: {e}. App functionality will be limited.")
+    st.error("🔧 **Startup issue detected.** Some features may not work correctly. Please refresh the page or contact support if the problem persists.", icon="⚠️")
     logger.error(f"Project import failed (Exception): {e}", exc_info=True)
     if 'Duplicated timeseries' in str(e):
         st.warning("Hint: The 'Duplicated timeseries' error often relates to Prometheus metrics. Ensure they are removed or handled correctly in resource_fetcher.py if not needed.")
@@ -128,7 +128,7 @@ if sys.platform == "win32":
 async def handle_recommendation_submission_async(query: str, top_n: int, general_mode: bool, concise_mode: bool, answer_placeholder: Any, project_modules_loaded_flag: bool): # Renamed arg
     """Handles the recommendation submission logic asynchronously."""
     if not project_modules_loaded_flag:
-        st.error("Cannot recommend: Core project modules not loaded.")
+        st.error("🔧 **Technical issue detected.** Please refresh the page or contact support if the problem persists.", icon="⚠️")
         return
 
     # Ensure cli_run_recommendation is available
@@ -136,7 +136,7 @@ async def handle_recommendation_submission_async(query: str, top_n: int, general
         from scripts.cli import run_recommendation as cli_run_recommendation
         from hybrid_search_rag import config # Ensure config is in scope here if needed for TOP_N_RESULTS
     except ImportError:
-        st.error("Failed to import recommendation function or config. Cannot proceed.")
+        st.error("🔧 **System configuration issue.** Please refresh the page or contact support if the problem persists.", icon="⚠️")
         logger.error("ImportError within handle_recommendation_submission_async for run_recommendation or config.")
         return
 
@@ -172,7 +172,7 @@ async def handle_recommendation_submission_async(query: str, top_n: int, general
             if answer_placeholder: answer_placeholder.empty()
 
     except Exception as e:
-        st.error(f"Error during recommendation: {e}", icon="❌")
+        st.error("🤖 **Sorry, something went wrong while generating your response.** Please try again with a different question or refresh the page.", icon="❌")
         logger.error(f"Recommendation Error in async handler: {e}", exc_info=True)
         if answer_placeholder: answer_placeholder.empty()
         st.session_state.llm_answer = None
@@ -193,11 +193,11 @@ if project_modules_loaded and check_nltk_data:
          st.error("NLTK check function `check_nltk_data` not found. Manual NLTK check block needed.")
          pass
     except SystemExit:
-          st.error("Fatal Error: Failed to download required NLTK data during startup. App cannot continue.")
+          st.error("📚 **Language processing setup failed.** The app requires additional language data to function. Please refresh the page to retry the automatic setup.", icon="🔄")
           logger.critical("NLTK download failed during initial check. Stopping app.")
           st.stop()
     except Exception as nltk_e:
-         st.error(f"Error during initial NLTK check: {nltk_e}")
+         st.error("🔧 **Language processing initialization issue.** Please refresh the page or contact support if this problem persists.", icon="⚠️")
          logger.error(f"NLTK check failed during app init: {nltk_e}", exc_info=True)
          st.stop()
 else:
@@ -283,7 +283,9 @@ if project_modules_loaded:
 
 logger.info(f"Components loaded status: {components_loaded_status}")
 if not components_loaded_status and project_modules_loaded:
-    st.error(f"Core RAG components failed to load: {load_error_message}. Recommendation and Fetch Data functionality disabled.")
+    # Show a friendly welcome message instead of scary error
+    st.info("🎯 **Welcome to Research Assistant!** To get started, please add some research papers to the knowledge base using the **'Update Knowledge Base'** tab below. This will enable the AI recommendation features.")
+    st.markdown("💡 **Tip:** Try searching for topics like 'machine learning', 'quantum computing', or 'artificial intelligence' to build your initial knowledge base.")
 
 
 # --- UI Tabs (with Icons) ---
@@ -340,10 +342,15 @@ with tab_rec:
             disabled=not components_loaded_status or not query,
             use_container_width=True
         )
+        
+        # Show helpful guidance when knowledge base is empty
+        if not components_loaded_status:
+            st.caption("💡 **Knowledge base is empty** - Add research papers in the 'Update Knowledge Base' tab to get started!")
 
     if submit_rec:
         if not components_loaded_status:
-            st.error("Cannot recommend: Core components failed load.")
+            st.info("🎯 **Get started by adding research papers!** Please use the **'Update Knowledge Base'** tab to add some papers first. Once you have content in your knowledge base, you'll be able to ask questions here.", icon="💡")
+            st.markdown("📚 **Quick tip:** Try searching for topics like 'machine learning', 'artificial intelligence', or your specific research area in the Update Knowledge Base tab.")
         else:
             st.session_state.rec_query = query
             st.session_state.rec_general = general_mode
@@ -376,7 +383,7 @@ with tab_rec:
                     project_modules_loaded
                 ))
             except Exception as e:
-                st.error(f"Error running async recommendation task: {e}", icon="❌")
+                st.error("🤖 **Oops! Something went wrong.** Please try again with a simpler question or refresh the page. If the issue persists, the knowledge base might need to be updated.", icon="❌")
                 logger.error(f"Async recommendation task runner error: {e}", exc_info=True)
                 if answer_placeholder: answer_placeholder.empty()
 
@@ -588,9 +595,15 @@ with tab_fetch:
         help="If provided, this URL will be crawled, and its content processed."
     )
 
-    if st.button("🚀 Fetch and Process Data", type="primary", disabled=not project_modules_loaded):
+    fetch_data_button = st.button("🚀 Fetch and Process Data", type="primary", disabled=not project_modules_loaded)
+    
+    # Show helpful guidance when system is not ready
+    if not project_modules_loaded:
+        st.caption("🔧 **System initialization required** - Please refresh the page to enable data fetching.")
+
+    if fetch_data_button:
         if not project_modules_loaded:
-            st.error("Cannot fetch data: Core components not loaded.")
+            st.error("🔧 **System setup incomplete.** Please refresh the page to initialize the data fetching system.", icon="🔄")
         else:
             with st.spinner("Fetching and processing data... This may take a while."):
                 try:
@@ -645,16 +658,16 @@ with tab_fetch:
                         if components_loaded_status:
                             st.toast("RAG Components reloaded with new data.", icon="🔄")
                         else:
-                            st.error(f"Failed to reload RAG components after data fetch: {load_error_message}")
+                            st.warning("🔄 **Components couldn't reload automatically.** Your data was fetched successfully, but you may need to refresh the page to use it in the Recommend tab.", icon="⚠️")
                     except Exception as reload_e:
-                        st.error(f"Error reloading components: {reload_e}")
+                        st.info("✅ **Data fetch completed!** Please refresh the page to use your new content in the Recommend tab.", icon="🔄")
                         logger.error(f"Component reload error: {reload_e}", exc_info=True)
 
                 except ImportError:
-                    st.error("Failed to import data fetching function. Cannot proceed.")
+                    st.error("🔧 **Technical issue detected.** The data fetching system couldn't load properly. Please refresh the page or contact support if the problem persists.", icon="❌")
                     logger.error("ImportError for setup_data_and_fetch in Streamlit app.")
                 except Exception as e:
-                    st.error(f"Error during data fetch: {e}")
+                    st.error("📡 **Data fetch encountered an issue.** This might be temporary - please try again in a moment. If it persists, check your internet connection or try with different search terms.", icon="🌐")
                     logger.error(f"Data fetch error: {e}", exc_info=True)
 # --- End Fetch Data Tab ---
 
@@ -680,10 +693,14 @@ with tab_arxiv:
     )
 
     submit_arxiv_search = st.button("Search arXiv", type="primary", disabled=not project_modules_loaded or not arxiv_query_direct_val)
+    
+    # Show helpful guidance when system is not ready
+    if not project_modules_loaded:
+        st.caption("🔧 **System initialization required** - Please refresh the page to enable arXiv search.")
 
     if submit_arxiv_search:
         if not project_modules_loaded:
-            st.error("Cannot search arXiv: Core components not loaded.")
+            st.error("🔧 **Search system unavailable.** Please refresh the page to initialize the arXiv search functionality.", icon="🔄")
         else:
             st.session_state.arxiv_query_direct = arxiv_query_direct_val
             st.session_state.arxiv_num_results_direct = num_results_direct_val
@@ -723,10 +740,10 @@ with tab_arxiv:
                     else:
                         st.info("No results found for your query on arXiv.")
                 except ImportError:
-                    st.error("Failed to import arXiv search function. Cannot proceed.")
+                    st.error("🔧 **Search system temporarily unavailable.** Please refresh the page or try again later.", icon="🔄")
                     logger.error("ImportError for run_arxiv_search in Streamlit app.")
                 except Exception as e:
-                    st.error(f"Error during arXiv search: {e}")
+                    st.error("🔍 **arXiv search encountered an issue.** This might be temporary - please try again with different search terms or check your internet connection.", icon="🌐")
                     logger.error(f"Direct arXiv search error: {e}", exc_info=True)
 # --- End Search arXiv Tab ---
 
@@ -745,8 +762,8 @@ with tab_feedback:
         components.iframe(TALLY_ORIGINAL_EMBED_URL, height=IFRAME_HEIGHT, scrolling=True)
         st.caption("Feedback form securely hosted by Tally.so.")
     except Exception as e:
-        st.error(f"Could not load the feedback form.", icon="😞")
-        st.markdown("You can also submit feedback directly [here](https://tally.so/r/n0kkp6).")
+        st.info("📝 **Feedback form temporarily unavailable.** Please use the direct link below to share your thoughts!", icon="🔗")
+        st.markdown("**[Submit Feedback Here](https://tally.so/r/n0kkp6)** (opens in new tab)")
         logger.error(f"Error embedding Tally iframe: {e}", exc_info=True)
 # --- End Feedback Tab ---
 
