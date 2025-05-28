@@ -367,24 +367,29 @@ Provide *only* the queries and URLs in the specified format.'''
 
     try:
         # Initialize ResourceFetcher
-        # It will try to set up sync Playwright if use_playwright_for_pdfs is True (default)
-        resource_fetcher_instance = ResourceFetcher(use_playwright_for_pdfs=True)
+        use_playwright_pdf = getattr(args, 'use_playwright_for_pdfs', True) # Default to True
+        fetch_timeout = getattr(args, 'fetch_timeout_seconds', 30) # Default to 30 seconds
 
-        # Enable PDF fetching for arXiv - now uses direct HTTP requests, no Playwright needed
-        # The should_fetch_arxiv_pdfs variable is not used by fetch_arxiv_papers anymore.
-        # fetch_arxiv_papers now only returns metadata including 'pdf_url'.
-        # The actual PDF content fetching will be done later using the ResourceFetcher instance.
-        logger.info("arXiv PDF metadata fetching enabled.")
+        fetcher = ResourceFetcher(
+            timeout=fetch_timeout,
+            use_playwright_for_pdfs=use_playwright_pdf
+            # cache_dir and rate_limiter can be added if needed, using defaults for now
+        )
+        # Pass the verbose/debug flag to fetch_arxiv_papers and other relevant calls if they accept it.
+        # The verbose argument for ResourceFetcher itself is not directly in its __init__ based on the provided snippet,
+        # but its logger can be configured. For now, we ensure args.debug is safely accessed for other functions.
+        
+        processed_details_all = {"total_new_items": 0, "errors": []}
+
+        logger.info(f"arXiv PDF metadata fetching enabled. Verbose/Debug: {getattr(args, 'debug', False)}")
 
         if arxiv_query and max_results > 0:
             try:
-                # fetch_arxiv_papers now only gets metadata, not the PDF content directly.
                 arxiv_metadata_list_with_potential_pdfs = await fetch_arxiv_papers(
                     query=arxiv_query,
                     max_results=max_results,
-                    verbose=args.debug # Pass debug flag for verbose logging in fetcher
+                    verbose=getattr(args, 'debug', False) # Pass debug flag for verbose logging
                 )
-                # Now, iterate and fetch PDF content if pdf_url is present
                 processed_arxiv_docs = []
                 for paper_meta in arxiv_metadata_list_with_potential_pdfs:
                     if paper_meta.get('pdf_url'):
@@ -392,7 +397,7 @@ Provide *only* the queries and URLs in the specified format.'''
                         # Use ResourceFetcher.fetch_document for PDF
                         # fetch_document is async, so await it.
                         # It handles the sync playwright call in a thread.
-                        fetched_doc_data = await resource_fetcher_instance.fetch_document(
+                        fetched_doc_data = await fetcher.fetch_document(
                             url=paper_meta['pdf_url'], 
                             source='arxiv', 
                             is_arxiv_pdf_link=True
