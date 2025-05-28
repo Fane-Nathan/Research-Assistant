@@ -183,12 +183,24 @@ async def handle_recommendation_submission_async(query: str, top_n: int, general
 # --- NLTK Data Download Logic ---
 if project_modules_loaded and check_nltk_data:
     try:
+        # NEW: Explicitly attempt to download 'punkt' before the main check.
+        # This is to ensure 'punkt' is available, as the 'punkt_tab' error
+        # suggests issues with locating necessary tokenizer data.
+        try:
+            import nltk # Ensure nltk is imported here
+            logger.info("APP.PY: Attempting direct download of NLTK 'punkt' resource...")
+            nltk.download('punkt')
+            logger.info("APP.PY: Direct download of NLTK 'punkt' completed or resource already present.")
+        except Exception as e:
+            logger.error(f"APP.PY: Error during direct NLTK 'punkt' download attempt: {e}", exc_info=True)
+        # END NEW
+
         if 'nltk_data_checked_app' not in st.session_state:
-             with st.spinner("Checking NLTK data..."):
-                 logger.info("Running initial NLTK check via imported function...")
-                 check_nltk_data()
+             with st.spinner("Checking NLTK data..."): # Spinner message can be updated if needed
+                 logger.info("Running initial NLTK check via imported function (check_nltk_data from cli.py)...")
+                 check_nltk_data() # This is the function from scripts.cli
                  st.session_state.nltk_data_checked_app = True
-                 logger.info("Initial NLTK check complete.")
+                 logger.info("Initial NLTK check complete (after explicit app-level punkt download attempt).")
     except NameError:
          st.error("NLTK check function `check_nltk_data` not found. Manual NLTK check block needed.")
          pass
@@ -398,7 +410,7 @@ with tab_rec:
         # as the answer_placeholder handles rendering the answer text.
         # st.markdown(st.session_state.llm_answer, unsafe_allow_html=True)
 
-        # --- DEBUGGING LINES (kept from previous modification) ---
+        # # --- DEBUGGING LINES (kept from previous modification) ---
         # st.markdown("---") # Removed
         # st.markdown("**DEBUG: Answer (displayed as raw text via st.text):**") # Removed
         # st.text(st.session_state.llm_answer) # Removed
@@ -406,7 +418,7 @@ with tab_rec:
         # st.markdown("---") # Removed
         # st.markdown("**DEBUG: Answer (displayed in a code block via st.code):**") # Removed
         # st.code(str(st.session_state.llm_answer), language=None) # Removed
-        # --- END DEBUGGING LINES ---
+        # # --- END DEBUGGING LINES ---
 
         # Display context sources if available
         if st.session_state.get("context_sources"):
