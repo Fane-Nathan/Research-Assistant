@@ -542,34 +542,64 @@ async def run_recommendation(query: str, num_final_results: int, general_mode: b
         if loaded_recommender is None or loaded_metadata is None:
              logger.info("Components not loaded, attempting load...")
              load_components()
-        if loaded_recommender is None or loaded_metadata is None:
-             raise RuntimeError("Core components failed to load. Run 'fetch' command first.")
+        
+        # Check if we need to proceed with general knowledge only (empty knowledge base)
+        kb_is_empty = loaded_metadata is None or len(loaded_metadata) == 0
+        
+        if kb_is_empty:
+            # Don't raise an error for empty knowledge base in general mode
+            if general_mode:
+                logger.warning("Knowledge base is empty, proceeding with general knowledge only.")
+            else:
+                # Only raise error if not in general mode
+                raise RuntimeError("Core components failed to load and general_mode is False. Run 'fetch' command first.")
 
-        logger.info("Retrieving relevant document chunks...")
-        num_candidates = max(config.RAG_NUM_DOCS + 5, num_final_results + 5)
-        num_candidates = min(num_candidates, len(loaded_metadata))
-        if num_candidates > 0:
-            rec_params = RecommendationParams(
-                semantic_candidates=config.SEMANTIC_CANDIDATES,
-                keyword_candidates=config.KEYWORD_CANDIDATES,
-                fusion_k=config.RANK_FUSION_K,
-                top_n_final=num_candidates
-            )
-            # Ensure loaded_recommender is not None before calling recommend
-            if loaded_recommender:
-                hybrid_results = loaded_recommender.recommend(
-                    query=query,
-                    resource_metadata=loaded_metadata,
-                    resource_embeddings=loaded_embeddings,
-                    bm25_index=loaded_bm25_index,
-                    params=rec_params
+        # Check if knowledge base exists and has content
+        kb_is_empty = loaded_metadata is None or len(loaded_metadata) == 0
+        
+        if kb_is_empty:
+            logger.warning("Knowledge base is empty, skipping retrieval step.")
+            hybrid_results = []  # Empty results list since we can't perform retrieval
+        else:
+            logger.info("Retrieving relevant document chunks...")
+            num_candidates = max(config.RAG_NUM_DOCS + 5, num_final_results + 5)
+            metadata_length = len(loaded_metadata) if loaded_metadata is not None else 0
+            num_candidates = min(num_candidates, metadata_length)
+            if num_candidates > 0:
+                rec_params = RecommendationParams(
+                    semantic_candidates=config.SEMANTIC_CANDIDATES,
+                    keyword_candidates=config.KEYWORD_CANDIDATES,
+                    fusion_k=config.RANK_FUSION_K,
+                    top_n_final=num_candidates
                 )
-            else: # Should be caught by earlier check, but as a safeguard
-                raise RuntimeError("Recommender is None, cannot proceed with recommendation.")
-            logger.info(f"Retrieved {len(hybrid_results)} candidate chunks.")
-        else: logger.warning("Skipping retrieval (no metadata available or zero candidates needed).")
+                # Ensure loaded_recommender is not None and loaded_metadata is not None before calling recommend
+                if loaded_recommender and loaded_metadata is not None:
+                    hybrid_results = loaded_recommender.recommend(
+                        query=query,
+                        resource_metadata=loaded_metadata,
+                        resource_embeddings=loaded_embeddings,
+                        bm25_index=loaded_bm25_index,
+                        params=rec_params
+                    )
+                else: # Should be caught by earlier check, but as a safeguard
+                    if general_mode:
+                        logger.warning("Recommender or metadata is None but general_mode is True, proceeding without retrieval.")
+                        hybrid_results = []
+                    else:
+                        raise RuntimeError("Recommender or metadata is None, cannot proceed with recommendation.")
+                logger.info(f"Retrieved {len(hybrid_results)} candidate chunks.")
+            else: logger.warning("Skipping retrieval (no metadata available or zero candidates needed).")
 
-        context_string = "No relevant document chunks were found in the local data."
+        # Determine if we have an empty knowledge base scenario
+        kb_is_empty = loaded_metadata is None or len(loaded_metadata) == 0
+        
+        # Set a contextual message for empty knowledge base or no relevant chunks
+        if kb_is_empty:
+            context_string = "The knowledge base is empty. No document chunks are available for context."
+            logger.info("Knowledge base is empty - proceeding with empty context.")
+        else:
+            context_string = "No relevant document chunks were found in the local data."
+        
         reference_map = {}
         if hybrid_results:
             top_chunks_for_rag = hybrid_results[:config.RAG_NUM_DOCS]
@@ -586,8 +616,12 @@ async def run_recommendation(query: str, num_final_results: int, general_mode: b
             formatted_source_list = [f"[{num}] {details}" for num, details in reference_map.items()]
             logger.info(f"Prepared context from {len(raw_context_chunks_list)} chunks.")
         else:
-            logger.info("No relevant document chunks found to provide as context.")
-            formatted_source_list = ["No relevant document chunks found."]
+            if kb_is_empty:
+                logger.info("Knowledge base is empty - no context available.")
+                formatted_source_list = ["Knowledge base is empty - no documents available."]
+            else:
+                logger.info("No relevant document chunks found to provide as context.")
+                formatted_source_list = ["No relevant document chunks found."]
 
         final_prompt: str
         prompt_template_base = """[INST] {system_message}
