@@ -68,14 +68,53 @@ def _clean_text(text: Optional[str]) -> Optional[str]:
         # _module_logger.debug("Helper_CleanText: Input is None.") # Debug, can be noisy
         return None
     try:
-        text_no_extra_spaces = re.sub(r'[ \\t]+', ' ', text)
+        # First, fix encoding issues that often occur in PDF text extraction
+        # Replace common character problems seen in academic papers
+        text = text.replace('\\t', ' ')  # Replace tab characters
+        
+        # Fix common PDF extraction character issues
+        char_replacements = {
+            # Common PDF extraction artifacts
+            '�': '',       # Remove replacement character
+            '\ufb01': 'fi', # Fix common ligatures
+            '\ufb02': 'fl',
+            '\u2019': "'", # Smart quotes and apostrophes
+            '\u201c': '"',
+            '\u201d': '"',
+            # Fix typical arXiv paper issues with space insertion 
+            # between letters (e.g., "a l g o r i t h m" → "algorithm")
+            ' i o n': 'ion',
+            ' a t i o n': 'ation',
+            ' t i o n': 'tion',
+            ' i n g': 'ing',
+            'i n g ': 'ing ',
+            ' e d ': 'ed ',
+            ' e r ': 'er ',
+            ' e s t': 'est',
+            ' t h e': 'the',
+            't h e ': 'the ',
+            ' a n d': 'and',
+            'a n d ': 'and '
+        }
+        
+        for old, new in char_replacements.items():
+            text = text.replace(old, new)
+        
+        # Process the text for spacing and newlines
+        text_no_extra_spaces = re.sub(r'[ \t]+', ' ', text)
         lines = text_no_extra_spaces.splitlines()
         cleaned_lines = [line.strip() for line in lines if line.strip()]
+        
         if not cleaned_lines:
             return None
-        text_joined_lines = "\\n".join(cleaned_lines)
-        text_no_extra_newlines = re.sub(r'\\n{3,}', '\\n\\n', text_joined_lines)
+            
+        # Join lines with newline (using proper \n, not \\n)
+        text_joined_lines = "\n".join(cleaned_lines)
+        # Remove excessive newlines (using proper \n, not \\n)
+        text_no_extra_newlines = re.sub(r'\n{3,}', '\n\n', text_joined_lines)
         cleaned_text = text_no_extra_newlines.strip()
+        
+        # Final check - verify we have actual content
         return cleaned_text if cleaned_text else None
     except Exception as e:
         _module_logger.error(f"Helper_CleanText: Error cleaning text: {e}", exc_info=False) # exc_info=False for less verbose error
@@ -89,20 +128,39 @@ def _parse_pdf_content(pdf_bytes: bytes, source_url: str) -> Optional[str]:
             if doc.is_encrypted and not doc.authenticate(""):
                 _module_logger.warning(f"Helper_ParsePDF: PDF is encrypted and cannot be opened: {source_url}")
                 return None
+                
+            # Process each page with enhanced text extraction
             for page_num in range(len(doc)):
                 page = doc.load_page(page_num)
-                # page.get_text("text") is the correct PyMuPDF usage.
-                # Linter errors about this are likely due to incomplete stubs for fitz/PyMuPDF.
-                page_text = page.get_text("text") 
-                if page_text:
-                    pdf_text_parts.append(page_text.strip())
+                try:
+                    # Try different text extraction modes if available
+                    page_text = page.get_text("text")  # type: ignore # Basic text mode
+                    
+                    # If text seems garbled (common with academic papers), try other modes
+                    if page_text and len(page_text) > 100:
+                        # Check for common signs of encoding issues
+                        if page_text.count(' ') / len(page_text) > 0.4:  # Too many spaces
+                            # Try alternative extraction modes
+                            blocks = page.get_text("blocks") # type: ignore
+                            if blocks:
+                                # Extract and join block text with better formatting
+                                block_texts = [b[4] for b in blocks if len(b) > 4]
+                                page_text = "\n".join(block_texts)
+                    
+                    if page_text:
+                        pdf_text_parts.append(page_text.strip())
+                except Exception as page_e:
+                    _module_logger.error(f"Helper_ParsePDF: Error extracting text from page {page_num}: {page_e}")
+                    continue  # Try next page
         
         if not pdf_text_parts:
             _module_logger.warning(f"Helper_ParsePDF: No text parts extracted from PDF pages: {source_url}")
             return None
 
-        full_pdf_text = "\\n\\n".join(filter(None, pdf_text_parts))
+        # Join with proper newlines, not escaped newlines
+        full_pdf_text = "\n\n".join(filter(None, pdf_text_parts))
         cleaned_text = _clean_text(full_pdf_text)
+        
         if not cleaned_text:
             _module_logger.warning(f"Helper_ParsePDF: No text extracted from PDF after cleaning: {source_url}")
         else:
@@ -415,19 +473,31 @@ class ResourceFetcher:
         text_content: Optional[str] = None
         title_text: Optional[str] = None
         try:
-            soup = BeautifulSoup(html_string, 'html.parser')
+            # Use 'html5lib' for better encoding support when available
+            try:
+                soup = BeautifulSoup(html_string, 'html5lib')
+                parser = 'html5lib'
+            except ImportError:
+                soup = BeautifulSoup(html_string, 'html.parser')
+                parser = 'html.parser'
             
+            self.logger.debug(f"{log_prefix} - Using {parser} parser")
+            
+            # Extract title with encoding handling
             title_tag = soup.find('title')
             if title_tag:
                 # Use get_text() for safer title extraction from BeautifulSoup tag
-                title_text = _clean_text(title_tag.get_text(strip=True))
+                raw_title = title_tag.get_text(strip=True)
+                title_text = _clean_text(raw_title)
             
+            # Extract content with better separator handling
             body_tag = soup.find('body')
             if body_tag:
-                raw_body_text = body_tag.get_text(separator='\\n', strip=True)
+                # Use \n instead of \\n for separator
+                raw_body_text = body_tag.get_text(separator='\n', strip=True)
                 text_content = _clean_text(raw_body_text)
             else: 
-                raw_html_text = soup.get_text(separator='\\n', strip=True)
+                raw_html_text = soup.get_text(separator='\n', strip=True)
                 text_content = _clean_text(raw_html_text)
 
             if text_content:
@@ -577,7 +647,7 @@ async def fetch_arxiv_papers(
                         'entry_id': entry_id_val, 
                         'pdf_url': pdf_url, 
                         'url': entry_id_val, 
-                        'summary': _clean_text(summary.replace('\\n', ' ')),
+                        'summary': _clean_text(summary.replace('\n', ' ')),
                         'categories': categories, 
                         'source': CONTENT_TYPE_ARXIV,
                         'text_content': None, 

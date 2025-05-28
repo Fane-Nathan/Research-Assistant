@@ -49,6 +49,8 @@ try:
     from rank_bm25 import BM25Okapi # type: ignore
     # Import the updated llm_interface
     from hybrid_search_rag.llm_services.llm_interface import get_llm_response, get_llm_response_stream
+    # Import the text cleaner for fixing garbled text in academic papers
+    from hybrid_search_rag.text_processing.text_cleaner import clean_context_list, clean_academic_title
 except ImportError as e:
     # Use print for critical import errors as logger might not be fully configured yet
     print(f"ERROR: Failed to import project modules in cli.py: {e}", file=sys.stderr)
@@ -681,8 +683,7 @@ async def run_recommendation(query: str, num_final_results: int, general_mode: b
                  snippet = (chunk_text or '')[:config.MAX_CONTEXT_LENGTH_PER_DOC]
                    # Create a copy of the chunk metadata and add a 'content' key for the UI
                  chunk_meta_copy = chunk_meta.copy()
-                 chunk_meta_copy['content'] = chunk_text  # Add 'content' key that maps to 'chunk_text'
-                 # Add metadata for the UI
+                 chunk_meta_copy['content'] = chunk_text  # Add 'content' key that maps to 'chunk_text'                 # Add metadata for the UI
                  if 'metadata' not in chunk_meta_copy:
                      chunk_meta_copy['metadata'] = {
                          'title': title,
@@ -693,6 +694,9 @@ async def run_recommendation(query: str, num_final_results: int, general_mode: b
                  raw_context_chunks_list.append(chunk_meta_copy)
                  context_texts.append(f"Source [{chunk_num}]:Title: {title} URL: {url} Content Snippet: {snippet}")
                  reference_map[chunk_num] = f"{title} (URL: {url})"
+            
+            # Clean up the text in context chunks to fix garbled characters
+            raw_context_chunks_list = clean_context_list(raw_context_chunks_list)
             
             # Log context chunk structure for debugging
             if raw_context_chunks_list:
