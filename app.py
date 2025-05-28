@@ -181,39 +181,56 @@ async def handle_recommendation_submission_async(query: str, top_n: int, general
 
 
 # --- NLTK Data Download Logic ---
-if project_modules_loaded and check_nltk_data:
-    try:
-        # NEW: Explicitly attempt to download 'punkt' before the main check.
-        # This is to ensure 'punkt' is available, as the 'punkt_tab' error
-        # suggests issues with locating necessary tokenizer data.
-        try:
-            import nltk # Ensure nltk is imported here
-            logger.info("APP.PY: Attempting direct download of NLTK 'punkt' resource...")
-            nltk.download('punkt')
-            logger.info("APP.PY: Direct download of NLTK 'punkt' completed or resource already present.")
-        except Exception as e:
-            logger.error(f"APP.PY: Error during direct NLTK 'punkt' download attempt: {e}", exc_info=True)
-        # END NEW
+# This block should be placed after initial imports (like logger, nltk, os)
+# and before check_nltk_data is called or any other NLTK-dependent code runs.
 
+try:
+    import nltk
+    import os
+    logger.info("APP.PY: NLTK data check block reached.")
+    logger.info(f"APP.PY: Initial nltk.data.path: {nltk.data.path}")
+
+    # Attempt to download 'punkt_tab' as suggested by the error message
+    # Also, let's try downloading 'punkt' as well, as 'punkt_tab' might be a sub-resource.
+    nltk_packages_to_try = ['punkt', 'punkt_tab'] # Try 'punkt' first, then 'punkt_tab'
+    for pkg_name in nltk_packages_to_try:
+        try:
+            logger.info(f"APP.PY: Attempting direct download of NLTK '{pkg_name}' resource...")
+            nltk.download(pkg_name)
+            logger.info(f"APP.PY: Direct download of NLTK '{pkg_name}' completed or resource already present.")
+        except ValueError as ve: # nltk.download can raise ValueError for unknown packages
+            logger.error(f"APP.PY: ValueError during NLTK '{pkg_name}' download attempt: {ve}. This might indicate '{pkg_name}' is not a valid package name.", exc_info=True)
+        except Exception as e:
+            logger.error(f"APP.PY: Error during NLTK '{pkg_name}' download attempt: {e}", exc_info=True)
+    
+    logger.info(f"APP.PY: nltk.data.path after download attempts: {nltk.data.path}")
+
+except Exception as e:
+    logger.error(f"APP.PY: Error in NLTK pre-check/download block: {e}", exc_info=True)
+
+if project_modules_loaded and 'check_nltk_data' in globals() and callable(check_nltk_data):
+    try:
         if 'nltk_data_checked_app' not in st.session_state:
-             with st.spinner("Checking NLTK data..."): # Spinner message can be updated if needed
-                 logger.info("Running initial NLTK check via imported function (check_nltk_data from cli.py)...")
-                 check_nltk_data() # This is the function from scripts.cli
-                 st.session_state.nltk_data_checked_app = True
-                 logger.info("Initial NLTK check complete (after explicit app-level punkt download attempt).")
-    except NameError:
-         st.error("NLTK check function `check_nltk_data` not found. Manual NLTK check block needed.")
-         pass
-    except SystemExit:
-          st.error("📚 **Language processing setup failed.** The app requires additional language data to function. Please refresh the page to retry the automatic setup.", icon="🔄")
-          logger.critical("NLTK download failed during initial check. Stopping app.")
-          st.stop()
-    except Exception as nltk_e:
-         st.error("🔧 **Language processing initialization issue.** Please refresh the page or contact support if this problem persists.", icon="⚠️")
-         logger.error(f"NLTK check failed during app init: {nltk_e}", exc_info=True)
-         st.stop()
+            with st.spinner("Verifying language processing components..."): # Updated spinner
+                logger.info("APP.PY: Running initial NLTK check via imported function (check_nltk_data from cli.py)...")
+                check_nltk_data()  # This is the function from scripts.cli
+                st.session_state.nltk_data_checked_app = True
+                logger.info("APP.PY: Initial NLTK check complete.")
+    except NameError: # Should not happen if check_nltk_data is checked above
+        st.error("🔧 **Critical Error:** Language processing setup function (check_nltk_data) not found. The application cannot start correctly.", icon="🚨")
+        logger.error("APP.PY: NameError: check_nltk_data not found, though it should be loaded.", exc_info=True)
+        st.stop()
+    except Exception as e:
+        st.error(f"🔧 **Error during language component verification:** {e}. Please refresh or contact support.", icon="⚠️")
+        logger.error(f"APP.PY: Error during execution of check_nltk_data(): {e}", exc_info=True)
+        # Optionally, st.stop() here if this is critical
 else:
-    logger.warning("Skipping NLTK check as project modules failed to load.")
+    if not project_modules_loaded:
+        logger.warning("APP.PY: NLTK check skipped because project_modules_loaded is false.")
+    if 'check_nltk_data' not in globals() or not callable(check_nltk_data):
+        logger.warning("APP.PY: NLTK check skipped because check_nltk_data is not available or not callable.")
+        st.warning("🔧 **Setup Incomplete:** Core language components are not yet available. Please wait or refresh.", icon="⏳")
+
 
 # --- Title, Introduction, and Disclaimer ---
 st.title("📚 Research Paper Assistant")
