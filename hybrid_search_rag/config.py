@@ -33,7 +33,7 @@ except Exception as e:
     logger.warning(f"Falling back to current working directory as project root: {_project_root_value}")
 
 PROJECT_ROOT: Final[str] = _project_root_value
-
+logger.info(f"PROJECT_ROOT set to: {PROJECT_ROOT}") # Added log for PROJECT_ROOT
 
 # --- Environment Variable Loading (.env) ---
 DOTENV_PATH: Final[str] = os.path.join(PROJECT_ROOT, '.env')
@@ -57,9 +57,19 @@ except Exception as e:
 # Defines where data like metadata, embeddings, and BM25 indexes are stored.
 # DATA_DIR: Final[str] = os.path.join(PROJECT_ROOT, "data_store", "corpus_data") # Original
 DATA_DIR: Final[str] = os.path.join(PROJECT_ROOT, "data_hybrid") # Changed to data_hybrid
+logger.info(f"DATA_DIR set to: {DATA_DIR}") # Added log for DATA_DIR
+
 METADATA_FILE: Final[str] = "combined_metadata.json"
 EMBEDDINGS_FILE: Final[str] = "combined_embeddings.npy"
 BM25_INDEX_FILE: Final[str] = "bm25_index.pkl"
+
+# Log the full paths for clarity
+_full_metadata_path = os.path.join(DATA_DIR, METADATA_FILE)
+_full_embeddings_path = os.path.join(DATA_DIR, EMBEDDINGS_FILE)
+_full_bm25_path = os.path.join(DATA_DIR, BM25_INDEX_FILE)
+logger.info(f"Expected metadata file path: {_full_metadata_path}")
+logger.info(f"Expected embeddings file path: {_full_embeddings_path}")
+logger.info(f"Expected BM25 index file path: {_full_bm25_path}")
 
 
 # ==============================================================================
