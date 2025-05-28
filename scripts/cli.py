@@ -59,84 +59,81 @@ except ImportError as e:
 
 
 # --- NLTK Data Check ---
-# Flag to ensure check/download runs only once per script execution
-_nltk_data_checked_cli = False
+# Flag to ensure check/download runs only once per script execution if successful.
+# If it fails, it might be re-attempted.
+_nltk_data_checked_cli_status: Optional[bool] = None
 
-def check_nltk_data():
-    """
-    Checks required NLTK data ('punkt', 'stopwords').
-    Attempts download if missing. Exits if download fails.
-    Ensures check runs only once per script execution.
-    """
-    global _nltk_data_checked_cli
-    if _nltk_data_checked_cli:
-        # logger.debug("NLTK data check already performed in this CLI execution.")
-        return True # Already checked in this run, return True for success
 
-    required_data = {'punkt': 'tokenizers/punkt', 'stopwords': 'corpora/stopwords'}
-    missing_data = []
-    logger.info("Checking required NLTK data...")
-    for name, path in required_data.items():
+def check_nltk_data() -> bool:
+    """
+    Checks for required NLTK data packages ('punkt', 'stopwords').
+    Attempts to download them if missing.
+    For 'punkt', it specifically tests nltk.sent_tokenize.
+    Returns True if all packages are verified and usable, False otherwise.
+    """
+    global _nltk_data_checked_cli_status
+    # If previously checked and successful, return True.
+    # If previously failed, allow re-attempt (by not returning False immediately based on flag).
+    if _nltk_data_checked_cli_status is True:
+        return True
+
+    logger.info("Performing NLTK data check (CLI version)...")
+    required_nltk_packages = ["punkt", "stopwords"]
+    all_packages_ok = True
+
+    for package_name in required_nltk_packages:
+        package_verified = False
         try:
-            nltk.data.find(path)
-            logger.info(f"NLTK data '{name}' found.")
+            if package_name == "punkt":
+                # Test 1: Find the main English pickle file
+                nltk.data.find("tokenizers/punkt/PY3/english.pickle")
+                logger.info(f"NLTK package '{package_name}' (english.pickle) found.")
+                # Test 2: Perform actual sentence tokenization
+                nltk.sent_tokenize("This is a test sentence. This ensures punkt is fully functional.")
+                logger.info(f"NLTK package '{package_name}' successfully tested with sent_tokenize.")
+                package_verified = True
+            elif package_name == "stopwords":
+                nltk.data.find("corpora/stopwords/english") # Check for English stopwords list
+                logger.info(f"NLTK package '{package_name}' (english stopwords) found.")
+                # Optionally, load them: from nltk.corpus import stopwords; stopwords.words('english')
+                package_verified = True
+            
+            if not package_verified: # Should not happen if above checks pass without LookupError
+                 raise LookupError(f"Initial check for {package_name} passed but verification logic failed.")
+
         except LookupError:
-            logger.warning(f"NLTK data '{name}' not found.")
-            missing_data.append(name) # Add to list if missing
-
-    if missing_data:
-        logger.warning(f"Missing NLTK data packages: {', '.join(missing_data)}.")
-        # Use print for CLI visibility during download attempt
-        print(f"\nAttempting to download missing NLTK data: {', '.join(missing_data)}...", file=sys.stderr) # Escaped newline
-        download_success = True
-        try:
-            # Attempt to bypass SSL verification if needed (common issue)
+            logger.warning(f"NLTK package '{package_name}' not found or initial test failed. Attempting download...")
             try:
-                _create_unverified_https_context = ssl._create_unverified_context
-            except AttributeError:
-                pass # Doesn't exist, proceed normally
-            else:
-                ssl._create_default_https_context = _create_unverified_https_context # type: ignore
-                logger.info("Applied SSL context workaround for NLTK download.")
+                nltk.download(package_name, quiet=True)
+                logger.info(f"NLTK package '{package_name}' downloaded.")
+                # Re-verify after download
+                if package_name == "punkt":
+                    nltk.data.find("tokenizers/punkt/PY3/english.pickle") # Re-check pickle
+                    nltk.sent_tokenize("This is a test sentence after download. For NLTK punkt.") # Re-test tokenize
+                    logger.info(f"NLTK package '{package_name}' successfully re-tested after download.")
+                elif package_name == "stopwords":
+                    nltk.data.find("corpora/stopwords/english")
+                    logger.info(f"NLTK package '{package_name}' (english stopwords) verified after download.")
+                package_verified = True
+            except Exception as e:
+                logger.error(f"Failed to download or verify NLTK package '{package_name}' after download attempt: {e}", exc_info=True)
+                all_packages_ok = False
+        except Exception as e_test: # Catch other errors from tests (e.g., sent_tokenize)
+            logger.error(f"NLTK package '{package_name}' test failed: {e_test}", exc_info=True)
+            all_packages_ok = False
+        
+        if not package_verified and all_packages_ok: # If a package wasn't verified but no error set all_packages_ok to False
+            all_packages_ok = False
 
-            for item_name_to_download in missing_data: # Changed loop variable to avoid conflict
-                print(f"Downloading NLTK package: {item_name_to_download}...")
-                # Use quiet=False for CLI to show progress/errors
-                if nltk.download(item_name_to_download, quiet=False): # Use item_name_to_download
-                    logger.info(f"Successfully downloaded NLTK data '{item_name_to_download}'.")
-                    # Verify immediately after download
-                    try:
-                        nltk.data.find(required_data[item_name_to_download]) # Use item_name_to_download for lookup
-                        logger.info(f"Verified NLTK data '{item_name_to_download}' after download.")
-                    except LookupError:
-                        logger.error(f"Verification failed after downloading '{item_name_to_download}'. Download might be incomplete or corrupted.")
-                        download_success = False
-                        break # Stop trying if verification fails
-                else:
-                    # nltk.download returns None if download failed
-                    logger.error(f"NLTK download command failed for '{item_name_to_download}'. Check network connection or NLTK server status.")
-                    download_success = False
-                    break # Stop trying if download fails
 
-        except Exception as e:
-            logger.error(f"An error occurred during NLTK download: {e}", exc_info=True)
-            download_success = False
-
-        if not download_success:
-            print("Automatic NLTK download failed.", file=sys.stderr)
-            print("Please try installing the data manually in your environment:", file=sys.stderr)
-            print(">>> import nltk", file=sys.stderr)
-            for name in missing_data: # Iterate using original 'name' from required_data if needed
-                print(f">>> nltk.download('{name}')", file=sys.stderr)
-            print("Exiting due to missing NLTK data.", file=sys.stderr)
-            sys.exit(1) # Exit if essential data couldn't be obtained
-        else:
-            logger.info("Finished NLTK download attempt.")
+    if not all_packages_ok:
+        logger.critical("One or more NLTK data packages are missing or failed verification. Chunking and other NLP tasks may fail.")
+        _nltk_data_checked_cli_status = False # Mark as failed
     else:
-        logger.info("All required NLTK data packages found.")
+        logger.info("All required NLTK data packages verified and tested successfully (CLI version).")
+        _nltk_data_checked_cli_status = True # Mark as successful
 
-    _nltk_data_checked_cli = True # Mark as checked for this execution
-    return True # Return True if all checks/downloads successful
+    return _nltk_data_checked_cli_status
 
 
 # --- Text Chunking ---
@@ -311,9 +308,13 @@ async def setup_data_and_fetch(args: argparse.Namespace) -> str:
 
     # --- Ensure NLTK data is available before proceeding ---
     try:
-        check_nltk_data() # Verify NLTK data specifically for the fetch process
-    except SystemExit: # Catch exit if NLTK download fails
-        return "Error: Failed to acquire necessary NLTK data ('punkt', 'stopwords'). Cannot proceed with fetch."
+        # Call the more robust check_nltk_data
+        if not check_nltk_data():
+            # This message will be returned to the UI if fetch is triggered from there
+            return "Error: Critical NLTK data (e.g., 'punkt' for sentence tokenization) is missing or failed verification. Cannot proceed with data fetching. Please check logs."
+    except Exception as e: # Catch any unexpected error from check_nltk_data
+        logger.critical(f"An unexpected error occurred during NLTK data check: {e}", exc_info=True)
+        return f"Error: Unexpected issue during NLTK data check: {e}. Cannot proceed."
     # ---
 
     # Determine Sources
