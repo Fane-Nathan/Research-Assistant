@@ -175,6 +175,10 @@ class ResourceFetcher:
         self._playwright_init_attempted = True
         self.logger.info("ResourceFetcher._init_playwright_sync - Attempting to initialize synchronous Playwright...")
         try:
+            if sync_playwright is None:
+                self.logger.error("ResourceFetcher._init_playwright_sync - sync_playwright is None. Playwright may not be installed.")
+                self._playwright_init_attempted = True
+                return
             self.playwright_sync_instance = sync_playwright().start()
             self.logger.info("ResourceFetcher._init_playwright_sync - Sync Playwright instance started.")
             self.playwright_browser = self.playwright_sync_instance.chromium.launch(headless=True)

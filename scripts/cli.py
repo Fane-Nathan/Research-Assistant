@@ -177,11 +177,20 @@ loaded_bm25_index: Optional[BM25Okapi] = None
 loaded_recommender: Optional[HybridRecommender] = None
 
 # --- Component Loading ---
-def load_components(force_reload: bool = False): # Made sync - no async operations needed
+def load_components(force_reload: bool = False) -> Dict[str, Any]: # Made sync - no async operations needed
     global loaded_metadata, loaded_embeddings, loaded_bm25_index, loaded_recommender
+    # Initialize a dictionary to hold the components
+    components_to_return: Dict[str, Any] = {
+        "data_manager": None,
+        "recommender": None,
+        "llm_interface": None # Assuming llm_interface is also a component to be returned
+    }
+
     if force_reload or loaded_metadata is None or loaded_recommender is None:
         logger.info(f"{'Forcing reload' if force_reload else 'Loading core components'}...")
         data_manager = DataManager(config.DATA_DIR, config.METADATA_FILE, config.EMBEDDINGS_FILE, config.BM25_INDEX_FILE)
+        components_to_return["data_manager"] = data_manager # Store data_manager
+
         # Load data and cast bm25_index to its expected type
         meta_temp, embeddings_temp, bm25_index_object = data_manager.load_all_data() # Assuming this is sync
         loaded_metadata = meta_temp
@@ -190,7 +199,9 @@ def load_components(force_reload: bool = False): # Made sync - no async operatio
 
         if loaded_metadata is None:
             logger.error("Metadata loading failed. Cannot initialize recommender.")
-            raise RuntimeError("Metadata loading failed. Run the 'fetch' command first.")
+            # Return partially filled components if metadata fails, app.py should check this
+            return components_to_return 
+            # raise RuntimeError("Metadata loading failed. Run the 'fetch' command first.") # Original behavior
 
         try:
             # Ensure NLTK data needed by Recommender/NltkManager is checked/loaded
@@ -198,19 +209,59 @@ def load_components(force_reload: bool = False): # Made sync - no async operatio
 
             embedder = EmbeddingModel(config.EMBEDDING_MODEL_NAME) # Assuming this is sync
             loaded_recommender = HybridRecommender(embed_model=embedder) # Assuming this is sync
+            components_to_return["recommender"] = loaded_recommender # Store recommender
             logger.info("Recommender initialized.")
+            
+            # Placeholder for LLM Interface if it needs to be part of loaded components
+            # For now, assuming llm_interface is globally accessible or not part of this specific dict
+            # If it is, it should be initialized and added here:
+            # from hybrid_search_rag.llm_services.llm_interface import SomeLLMInterfaceClass
+            # components_to_return["llm_interface"] = SomeLLMInterfaceClass()
+            # For the purpose of app.py checking, let's ensure it's present, even if None for now
+            if "llm_interface" not in components_to_return or components_to_return["llm_interface"] is None:
+                 # This part depends on how llm_interface is structured.
+                 # If it's a module with functions like get_llm_response, we might not need to "load" an instance.
+                 # For now, let's assume app.py checks for its presence in the returned dict.
+                 # A simple way is to assign the module itself if app.py expects an object with methods.
+                 try:
+                     from hybrid_search_rag.llm_services import llm_interface
+                     components_to_return["llm_interface"] = llm_interface # Assign the module
+                     logger.info("LLM Interface module assigned to components.")
+                 except ImportError as e:
+                     logger.error(f"Failed to import llm_interface module for components_to_return: {e}")
+                     # components_to_return["llm_interface"] will remain None
+
         except SystemExit: # Catch exit from check_nltk_data
              logger.critical("NLTK data check failed during component loading. Cannot initialize recommender.")
-             raise RuntimeError("Failed to acquire NLTK data during component loading.")
+             # Return partially filled components
+             return components_to_return
+             # raise RuntimeError("Failed to acquire NLTK data during component loading.") # Original behavior
         except Exception as e:
             logger.error(f"Recommender initialization failed: {e}", exc_info=True)
             loaded_recommender = None
-            raise RuntimeError("Recommender initialization failed.") from e
+            components_to_return["recommender"] = None # Ensure it's None on failure
+            # Return partially filled components
+            return components_to_return
+            # raise RuntimeError("Recommender initialization failed.") from e # Original behavior
 
         if loaded_embeddings is None: logger.warning("Embeddings file not found or invalid; semantic search disabled.")
         if loaded_bm25_index is None: logger.warning("BM25 index file not found or invalid; keyword search disabled.")
         if loaded_embeddings is None and loaded_bm25_index is None:
             logger.error("Both embeddings and BM25 index are missing. Search functionality severely limited.")
+    else:
+        # Components are already loaded, populate the dictionary from globals
+        logger.info("Core components already loaded, returning existing instances.")
+        components_to_return["data_manager"] = DataManager(config.DATA_DIR, config.METADATA_FILE, config.EMBEDDINGS_FILE, config.BM25_INDEX_FILE) # Potentially re-init or get existing instance
+        components_to_return["recommender"] = loaded_recommender
+        # Similar logic for llm_interface if it's managed globally and needs to be returned
+        try:
+            from hybrid_search_rag.llm_services import llm_interface
+            components_to_return["llm_interface"] = llm_interface # Assign the module
+        except ImportError as e:
+            logger.error(f"Failed to import llm_interface module for already loaded components: {e}")
+            components_to_return["llm_interface"] = None
+
+    return components_to_return
 
 # --- Data Fetching Logic ---
 async def setup_data_and_fetch(args: argparse.Namespace) -> str:

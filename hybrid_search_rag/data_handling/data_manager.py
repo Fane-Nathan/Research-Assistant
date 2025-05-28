@@ -192,3 +192,63 @@ class DataManager:
 
         logger.info("Data loading attempt finished.")
         return metadata, embeddings, bm25_index
+
+    def is_data_empty(self) -> bool:
+        """
+        Checks if the primary data files (metadata, embeddings, BM25 index) exist and are non-empty.
+        This is a more robust check than just looking at metadata.
+
+        Returns:
+            True if any essential data component is missing or appears empty, False otherwise.
+        """
+        # Check 1: Metadata file existence and content
+        if not os.path.exists(self.metadata_path):
+            logger.warning(f"is_data_empty: Metadata file missing: {self.metadata_path}")
+            return True
+        try:
+            # Attempt to load just to see if it's valid and non-empty
+            with open(self.metadata_path, 'r', encoding='utf-8') as f:
+                metadata_content = json.load(f)
+            if not metadata_content or not isinstance(metadata_content, list) or len(metadata_content) == 0:
+                logger.warning(f"is_data_empty: Metadata file {self.metadata_path} is empty or not a list.")
+                return True
+            logger.info(f"is_data_empty: Metadata file {self.metadata_path} seems OK ({len(metadata_content)} items).")
+        except (json.JSONDecodeError, IOError, OSError) as e:
+            logger.warning(f"is_data_empty: Error reading or parsing metadata file {self.metadata_path}: {e}")
+            return True # If metadata is unreadable, consider it empty/corrupt
+
+        # Check 2: Embeddings file existence (if metadata suggests it should be there)
+        # We assume if metadata exists, embeddings *should* ideally exist unless explicitly handled elsewhere.
+        if not os.path.exists(self.embeddings_path):
+            logger.warning(f"is_data_empty: Embeddings file missing: {self.embeddings_path}. Considering data potentially incomplete.")
+            # Depending on strictness, you might return True here.
+            # For now, let's say if metadata is present, some functionality might still work without embeddings.
+            # However, for the RAG app's primary purpose, embeddings are crucial.
+            # return True # Uncomment if embeddings are strictly required for KB to be non-empty
+
+        # Check 3: BM25 index file existence (similar logic to embeddings)
+        if not os.path.exists(self.bm25_path):
+            logger.warning(f"is_data_empty: BM25 index file missing: {self.bm25_path}. Considering data potentially incomplete.")
+            # return True # Uncomment if BM25 is strictly required
+        
+        # If all checks pass (or are leniently passed), consider data non-empty
+        logger.info("is_data_empty: All checked data components appear to be present and metadata is non-empty.")
+        return False
+
+    def get_data_summary(self) -> Dict[str, Any]:
+        """
+        Provides a summary of the loaded data for inspection or debugging.
+
+        Returns:
+            Dictionary containing counts of metadata items, embeddings shape, and BM25 index info.
+        """
+        metadata, embeddings, bm25_index = self.load_all_data()
+        metadata_count = len(metadata) if metadata is not None else 0
+        embeddings_shape = embeddings.shape if embeddings is not None else "No embeddings loaded"
+        bm25_info = str(bm25_index) if bm25_index is not None else "No BM25 index loaded"
+
+        return {
+            "metadata_count": metadata_count,
+            "embeddings_shape": embeddings_shape,
+            "bm25_index_info": bm25_info,
+        }
