@@ -178,6 +178,18 @@ scripts/logs_*/
 test_*.py
 final_*.py
 *verification*.py
+*diagnose*.py
 app.log
 *.log.txt
 logs-*.txt
+
+# Temp files directory cleanup
+temp_files/test_*
+temp_files/final_*
+temp_files/*verification*
+temp_files/*diagnose*
+temp_files/logs-*
+
+# Package management files (keep only requirements.txt)
+packages*.txt
+requirements_*.txt

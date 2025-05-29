@@ -560,11 +560,11 @@ with tab_rec:
                                 st.markdown(f"##### 📄 {title}")
                                 has_card_content = True
                             
-                            if abstract and abstract.strip() and abstract.lower() not in ["content not available. this may be a reference-only entry.", "n/a"]:
+                            if abstract and isinstance(abstract, str) and abstract.strip() and abstract.lower() not in ["content not available. this may be a reference-only entry.", "n/a"]:
                                 st.markdown("**Abstract:**")
                                 st.markdown(f"<small>{abstract}</small>", unsafe_allow_html=True)
                                 has_card_content = True
-                            elif source_item.get('content') and source_item.get('content').strip().lower() not in ["content not available. this may be a reference-only entry.", "no content available for this source.", "n/a"]:
+                            elif source_item.get('content') and isinstance(source_item.get('content'), str) and source_item.get('content').strip().lower() not in ["content not available. this may be a reference-only entry.", "no content available for this source.", "n/a"]:
                                 content_snippet = source_item['content']
                                 snippet_display = (content_snippet[:280] + '...') if len(content_snippet) > 280 else content_snippet
                                 st.markdown("**Content Snippet:**")
