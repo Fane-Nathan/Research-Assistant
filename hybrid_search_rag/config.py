@@ -94,8 +94,8 @@ LLM_PROVIDER_ORDER: Final[List[str]] = ["google", "groq", "deepseek"] # Example:
 # The interface will iterate through these models for the first provider in
 # LLM_PROVIDER_ORDER, then move to the models for the second provider, etc.
 LLM_GOOGLE_MODELS: Final[List[str]] = [
+    "gemini-2.5-flash-preview-05-20",
     "gemini-2.0-flash",                # Older alias
-    # "gemini-2.5-flash-preview-05-20",
     # "gemini-2.5-pro-preview-03-25",   # Fallback Google choice
 ]
 LLM_GROQ_MODELS: Final[List[str]] = [
@@ -110,9 +110,9 @@ LLM_DEEPSEEK_MODELS: Final[List[str]] = [
 
 # --- General LLM Parameters ---
 # These parameters will be attempted for all API calls.
-LLM_TEMPERATURE: Final[float] = 0.3
-LLM_MAX_NEW_TOKENS: Final[int] = 4096
-LLM_API_TIMEOUT: Final[int] = 60 # Timeout in seconds (adjust as needed)
+LLM_TEMPERATURE: Final[float] = 0.4
+LLM_MAX_NEW_TOKENS: Final[int] = 8192
+LLM_API_TIMEOUT: Final[int] = 180 # Timeout in seconds (adjust as needed)
 
 
 # ==============================================================================
@@ -141,7 +141,7 @@ HEAD_TIMEOUT: Final[int] = 20
 # ==============================================================================
 # --- Retrieval & Ranking Settings ---
 # ==============================================================================
-DEFAULT_QUERY: Final[str] = "Explain Retrieval-Augmented Generation (RAG)"
+DEFAULT_QUERY: Final[str] = "Explain "
 TOP_N_RESULTS: Final[int] = 10
 SEMANTIC_CANDIDATES: Final[int] = 150
 KEYWORD_CANDIDATES: Final[int] = 150

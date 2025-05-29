@@ -38,6 +38,7 @@ import re # For text processing (e.g., URL parsing in context display)
 
 from typing import List, Dict, Any, Tuple, AsyncGenerator, Optional, Generator # Ensure Any and Generator are imported
 import numpy as np # Keep if used by components
+from hybrid_search_rag import config
 
 # Import text cleaning functions for academic content
 from hybrid_search_rag.text_processing.text_cleaner import (
@@ -737,11 +738,12 @@ with tab_fetch:
             help="Enter keywords or topics to search on arXiv (e.g., 'transformer models', 'climate change AND policy')."
         )
         st.session_state.fetch_arxiv_query = arxiv_query_fetch
-        
+    
+        max_arxiv_results = getattr(config, 'MAX_ARXIV_RESULTS', 50)  # Default fallback
         num_arxiv_fetch = st.number_input(
             "Max arXiv Results to Fetch:", 
             min_value=0, 
-            max_value=50, # Set a reasonable max to prevent very long fetches
+            max_value=max_arxiv_results,
             value=st.session_state.fetch_num_arxiv, 
             step=1, 
             key="fetch_num_arxiv_input",
