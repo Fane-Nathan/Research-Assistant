@@ -37,9 +37,9 @@ This system represents a **Hybrid Machine Learning Architecture** that combines:
 ```python
 # ML Pipeline Complexity
 Neural Embeddings → Vector Similarity → Ranking Fusion → LLM Generation
-     ↓                    ↓                ↓              ↓
-  768-dim vectors    Cosine similarity   RRF algorithm   Transformer
-  (learned repr.)    (geometric ML)     (ensemble ML)   (generative ML)
+        ↓                    ↓                 ↓               ↓
+  768-dim vectors    Cosine similarity   RRF algorithm     Transformer
+  (learned repr.)     (geometric ML)     (ensemble ML)   (generative ML)
 ```
 
 **Why This Exceeds "Applied Rule-Based ML"**:
