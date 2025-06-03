@@ -177,6 +177,27 @@ similarity(q, d) = (q · d) / (||q|| * ||d||)
 where q = query_embedding, d = document_embedding
 ```
 
+**Simple Explanation**:
+Think of this formula as **measuring the "direction alignment" between two vectors in high-dimensional space**.
+
+- **The Top Part `(q · d)`**: This is the "dot product" - it multiplies corresponding numbers in both vectors and adds them up. It measures how much the vectors point in the same direction.
+
+- **The Bottom Part `(||q|| * ||d||)`**: These are the "magnitudes" (lengths) of each vector. This normalizes the result so it's always between -1 and +1.
+
+**Real-World Analogy**:
+Imagine you and a friend are each holding a flashlight in a dark room:
+- If you both point your flashlights in exactly the same direction → **similarity = 1.0** (perfect match)
+- If you point in completely opposite directions → **similarity = -1.0** (total mismatch)  
+- If you point perpendicular to each other → **similarity = 0.0** (no relationship)
+
+**In Our RAG System**:
+- **Query embedding** = vector representing what the user is looking for
+- **Document embedding** = vector representing what each document contains
+- **High similarity score** = the document is very relevant to the query
+- **Low similarity score** = the document is not relevant to the query
+
+The beauty of cosine similarity is that it ignores the "length" of the vectors and only cares about their direction, making it perfect for comparing semantic meaning regardless of document length.
+
 **Optimization Techniques**:
 - Vectorized operations using NumPy for batch processing
 - Memory-efficient top-k retrieval with `np.argpartition`
@@ -191,10 +212,42 @@ where q = query_embedding, d = document_embedding
 BM25(q,d) = Σ IDF(qi) * (f(qi,d) * (k1 + 1)) / (f(qi,d) + k1 * (1 - b + b * |d|/avgdl))
 ```
 
-**Parameters**:
-- `k1`: Term frequency normalization (typically 1.2-2.0)
-- `b`: Document length normalization (typically 0.75)
-- `avgdl`: Average document length in the corpus
+**Simple Explanation**:
+Think of BM25 as a **"smart word counting" algorithm** that answers: *"How well does this document match the search query based on important words?"*
+
+**Breaking Down the Formula**:
+
+1. **`Σ` (Sigma)**: "Add up scores for each word in the query"
+2. **`IDF(qi)`**: "How rare/special is this word?" 
+   - Rare words (like "quantum physics") get higher scores than common words (like "the", "and")
+3. **`f(qi,d)`**: "How many times does this word appear in the document?"
+4. **The Fraction Part**: "Adjust the score based on document length and word frequency"
+
+**Real-World Analogy**:
+Imagine you're a librarian helping someone find books:
+
+- **Query**: "machine learning algorithms"
+- **Document 1**: A short paper that mentions "machine learning" 10 times
+- **Document 2**: A long textbook that mentions "machine learning" 10 times
+
+BM25 says: *"The short paper is probably more focused on machine learning, so it should rank higher!"*
+
+**What Each Parameter Does**:
+- **`k1` (1.2-2.0)**: Controls how much extra credit we give for repeated words
+  - Higher k1 = "If a word appears many times, that's really important!"
+  - Lower k1 = "Once is enough, don't over-reward repetition"
+  
+- **`b` (0.75)**: Controls how much we penalize long documents
+  - b = 1.0 = "Long documents are definitely less focused"
+  - b = 0.0 = "Document length doesn't matter at all"
+
+- **`avgdl`**: Average document length in your collection (for comparison)
+
+**In Our RAG System**:
+- **High BM25 score** = Document contains important query words frequently and appropriately
+- **Low BM25 score** = Document doesn't contain key words or they're buried in lots of text
+
+**Why BM25 is Smart**: It balances word importance, frequency, and document length to find the most relevant matches!
 
 **Implementation Features**:
 - Pre-computed IDF weights for efficiency
