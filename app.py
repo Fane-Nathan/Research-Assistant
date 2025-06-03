@@ -95,7 +95,7 @@ try:
         run_arxiv_search as run_arxiv_search_cli,
         run_recommendation as cli_run_recommendation_async,
         check_nltk_data as check_nltk_data_cli,
-        chunk_text_by_sentences # Keep if used directly, otherwise can be removed if only used in CLI
+        chunk_text_by_sentences 
     )
     project_modules_loaded = True
     logger.info("Project module imports successful.")
@@ -177,21 +177,18 @@ def initialize_and_load_components():
     # 'knowledge_base_is_empty': bool,  # Crucial for UI state
     # 'status_message': str             # Informative message
     loaded_data_dict = load_components_cli(force_reload=force_reload)
-    st.session_state.force_component_reload = False # Reset flag
+    st.session_state.force_component_reload = False 
 
     if loaded_data_dict:
-        st.session_state.rag_components = loaded_data_dict # Store the whole dict for potential deeper inspection
+        st.session_state.rag_components = loaded_data_dict
         st.session_state.components_loaded_successfully = bool(loaded_data_dict.get("recommender"))
         
-        # Prioritize knowledge_base_is_empty from loaded_data_dict if available
         if "knowledge_base_is_empty" in loaded_data_dict:
             st.session_state.knowledge_base_is_empty = loaded_data_dict["knowledge_base_is_empty"]
         elif loaded_data_dict.get("data_manager") and hasattr(loaded_data_dict["data_manager"], 'is_data_empty'):
-            # Fallback to data_manager method if direct key is missing
             st.session_state.knowledge_base_is_empty = loaded_data_dict["data_manager"].is_data_empty()
             logger.info("Used data_manager.is_data_empty() for KB status.")
         else:
-            # If still no clear KB status, perform a robust file check as a last resort
             logger.warning("knowledge_base_is_empty not directly provided by load_components_cli, nor via data_manager.is_data_empty. Performing fallback file check.")
             kb_files_found_fallback = False
             if config and config.DATA_DIR and config.METADATA_FILE:
@@ -217,7 +214,7 @@ def initialize_and_load_components():
         logger.error("load_components_cli returned None or an empty dictionary. Critical failure.")
         st.session_state.components_loaded_successfully = False
         st.session_state.rag_components = None
-        st.session_state.knowledge_base_is_empty = True # Fallback assumption
+        st.session_state.knowledge_base_is_empty = True
         st.session_state.component_status_message = "Critical error: Component loader failed to return status."
 
 
@@ -233,14 +230,14 @@ async def handle_recommendation_submission_async(
     """
     st.session_state.recommendation_processing = True
     st.session_state.llm_answer = ""
-    st.session_state.context_sources = [] # This might be legacy if raw_context_chunks is primary
+    st.session_state.context_sources = []
     st.session_state.raw_context_chunks = []
     current_answer_display = ""
 
     try:
         logger.info(f"handle_recommendation_submission_async: Calling cli_run_recommendation_async for query '{query_text[:50]}...'")
         
-        if not cli_run_recommendation_async: # Should be caught by button disable logic too
+        if not cli_run_recommendation_async: 
             logger.error("cli_run_recommendation_async is not available!")
             st.session_state.llm_answer = "Error: Recommendation function not loaded."
             answer_placeholder.error(st.session_state.llm_answer)
@@ -260,16 +257,16 @@ async def handle_recommendation_submission_async(
         if result:
             answer_data, sources_data, raw_chunks_data = result
 
-            st.session_state.context_sources = sources_data if sources_data else [] # Keep for now if CLI returns it
+            st.session_state.context_sources = sources_data if sources_data else []
             st.session_state.raw_context_chunks = raw_chunks_data if raw_chunks_data else []
 
-            if isinstance(answer_data, types.GeneratorType): # For synchronous generator
+            if isinstance(answer_data, types.GeneratorType): 
                 for token in answer_data:
                     current_answer_display += token
-                    answer_placeholder.markdown(current_answer_display + "▌") # Display with a cursor
+                    answer_placeholder.markdown(current_answer_display + "▌") 
                 st.session_state.llm_answer = current_answer_display
                 if current_answer_display:
-                    answer_placeholder.markdown(current_answer_display) # Final display
+                    answer_placeholder.markdown(current_answer_display)
                 else:
                     st.session_state.llm_answer = "No specific answer generated from the provided context or query."
                     answer_placeholder.info(st.session_state.llm_answer)
@@ -320,17 +317,15 @@ if 'nltk_data_checked_app' not in st.session_state:
             logger.info("APP.PY: Initial NLTK check complete.")
     elif not project_modules_loaded:
         logger.warning("APP.PY: NLTK check skipped: project_modules_loaded is False.")
-    else: # project_modules_loaded is True, but check_nltk_data_cli is not
+    else:
         logger.warning("APP.PY: NLTK check skipped: check_nltk_data_cli function not available.")
         st.warning("🔧 **Setup Incomplete:** Core language components (NLTK check function) are not available. Please wait or refresh.", icon="⏳")
 
 
 # --- Initial Component Load (once per session or after forced reload) ---
 if 'components_loaded_successfully' not in st.session_state or st.session_state.get("force_component_reload"):
-    # Ensure first load is fresh or if forced_component_reload is True
     st.session_state.force_component_reload = True 
     initialize_and_load_components()
-    # force_component_reload is reset inside initialize_and_load_components
 
 # Log current status after potential initialization
 logger.info(f"App Rerun. Modules loaded: {project_modules_loaded}, Components loaded: {st.session_state.get('components_loaded_successfully', False)}, KB empty: {st.session_state.get('knowledge_base_is_empty', True)}")
@@ -361,9 +356,9 @@ if not project_modules_loaded:
     st.error("🚨 **Critical Error:** Core project modules could not be loaded. The application cannot function. Please check the logs and setup.", icon="❌")
 elif not st.session_state.get('components_loaded_successfully', False):
     st.warning(f"⚠️ RAG components are not fully loaded. Some features might be unavailable. Status: {st.session_state.get('component_status_message', 'Unknown error')}. Try refreshing or checking logs.", icon="🛠️")
-    if st.session_state.get('knowledge_base_is_empty', True): # Show this even if components failed, as it's a common starting point
+    if st.session_state.get('knowledge_base_is_empty', True):
          st.info("🎯 **Welcome!** To get started, add research papers via the **'Update Knowledge Base'** tab. This enables AI recommendations based on your documents.")
-elif st.session_state.get('knowledge_base_is_empty', True): # Modules and components OK, but no data
+elif st.session_state.get('knowledge_base_is_empty', True):
     st.info("🎯 **Welcome to Research Assistant!** Your knowledge base is currently empty. Please add some research papers using the **'Update Knowledge Base'** tab below to enable document-specific AI recommendations.")
     st.markdown("💡 **Tip:** You can search arXiv for topics like 'machine learning', 'quantum computing', or add specific web URLs.")
 # else: All systems go, KB has data. No specific welcome message needed here.
@@ -373,7 +368,7 @@ elif st.session_state.get('knowledge_base_is_empty', True): # Modules and compon
 # Initialize session state variables for UI if they don't exist
 if 'recommendation_processing' not in st.session_state: st.session_state.recommendation_processing = False
 if 'llm_answer' not in st.session_state: st.session_state.llm_answer = None
-if 'context_sources' not in st.session_state: st.session_state.context_sources = [] # May deprecate if raw_context_chunks is primary
+if 'context_sources' not in st.session_state: st.session_state.context_sources = []
 if 'raw_context_chunks' not in st.session_state: st.session_state.raw_context_chunks = []
 
 
@@ -432,7 +427,7 @@ with tab_rec:
         )
         st.markdown("---")
         
-        submit_rec_disabled = not query or not _modules_ok_rec_tab # Basic: query + core module
+        submit_rec_disabled = not query or not _modules_ok_rec_tab
         submit_rec_tooltip = ""
         if not query:
             submit_rec_tooltip = "Please enter a question."
@@ -455,11 +450,11 @@ with tab_rec:
             st.caption("🚫 **Critical:** Core recommendation modules missing.")
         elif not _components_ok_rec_tab:
             st.caption(f"⚠️ **RAG components issue:** {st.session_state.get('component_status_message', 'Not fully loaded')}. AI might use general knowledge only.")
-        elif not _kb_ready_rec_tab: # Modules & Components OK, but KB is empty
+        elif not _kb_ready_rec_tab: 
             st.caption("💡 **Knowledge base empty.** AI will use general knowledge. Add papers via 'Update KB' tab.")
         # else: All systems go for RAG.
 
-    if submit_rec: # Assumes _modules_ok_rec_tab is True if button was enabled and clicked
+    if submit_rec: 
         st.session_state.rec_query = query
         st.session_state.rec_general = general_mode 
         st.session_state.rec_concise = concise_mode
@@ -467,13 +462,12 @@ with tab_rec:
         effective_general_mode = general_mode
         knowledge_base_issue_message = ""
 
-        if not _components_ok_rec_tab: # Check components status again before running
+        if not _components_ok_rec_tab:
             knowledge_base_issue_message = "RAG components not fully loaded. Forcing Hybrid mode (using general AI knowledge)."
-            effective_general_mode = True # Force general mode if components are bad
-        elif not _kb_ready_rec_tab: # Components OK, but KB empty
+            effective_general_mode = True
+        elif not _kb_ready_rec_tab:
             knowledge_base_issue_message = "Knowledge base is empty. Forcing Hybrid mode (using general AI knowledge)."
-            effective_general_mode = True # Force general mode if KB is empty
-        
+            effective_general_mode = True 
         if knowledge_base_issue_message:
             st.warning(f"⚠️ {knowledge_base_issue_message}", icon="📚")
             logger.warning(f"User query '{query[:50]}...'. {knowledge_base_issue_message}")
@@ -484,7 +478,7 @@ with tab_rec:
         info_msg_parts = [f"Running recommendation with '{mode_name}' RAG and '{style_name}' Prompt..."]
         log_msg_detail_parts = []
 
-        if effective_general_mode and not general_mode: # Hybrid was forced by system
+        if effective_general_mode and not general_mode:
             reason = "RAG components not loaded" if not _components_ok_rec_tab else "empty Knowledge Base"
             forced_info = f"(Hybrid mode was automatically enabled because the {reason})."
             info_msg_parts.append(forced_info)
@@ -518,10 +512,10 @@ with tab_rec:
         except Exception as e: # Catch errors from asyncio.run or the async function itself
             st.error("🤖 **Oops! A critical error occurred while trying to start the recommendation.** Please refresh and try again.", icon="❌")
             logger.error(f"Critical error in submit_rec block (asyncio.run wrapper or async func): {e}", exc_info=True)
-            if answer_placeholder: answer_placeholder.empty() # Clear placeholder on error
+            if answer_placeholder: answer_placeholder.empty()
 
     # --- Display Results Section ---
-    if st.session_state.get("llm_answer") is not None: # Check if an answer (even empty or error) was set
+    if st.session_state.get("llm_answer") is not None: 
         st.markdown("---")
         # The answer_placeholder in handle_recommendation_submission_async handles live updates.
         # This st.markdown is a fallback or ensures it's displayed correctly after rerun if placeholder was cleared.
@@ -529,13 +523,13 @@ with tab_rec:
              st.markdown(st.session_state.llm_answer, unsafe_allow_html=True)
 
         # --- Displaying Retrieved Context ---
-        if not st.session_state.recommendation_processing and st.session_state.llm_answer: # Ensure processing is done
+        if not st.session_state.recommendation_processing and st.session_state.llm_answer:
             if st.session_state.raw_context_chunks:
                 with st.expander(f"📚 Retrieved Context ({len(st.session_state.raw_context_chunks)} sources)", expanded=False):
-                    cleaned_chunks = clean_context_list(st.session_state.raw_context_chunks) # Assumes this function is robust
+                    cleaned_chunks = clean_context_list(st.session_state.raw_context_chunks)
                     
                     content_found_in_chunks = False
-                    context_message_placeholder = st.empty() # For messages about context content
+                    context_message_placeholder = st.empty()
                     
                     for i, source_item in enumerate(cleaned_chunks):
                         title = source_item.get('title', "No Title Available")
@@ -552,7 +546,7 @@ with tab_rec:
                             arxiv_id = url.split(':')[-1]
                             url = f"https://arxiv.org/abs/{arxiv_id}"
                         
-                        with st.container(): # Using st.container for each card
+                        with st.container(): 
                             st.markdown(f'<div class="context-card">', unsafe_allow_html=True)
                             
                             has_card_content = False
@@ -571,7 +565,7 @@ with tab_rec:
                                 st.markdown(f"<small>{snippet_display}</small>", unsafe_allow_html=True)
                                 has_card_content = True
                             
-                            if not has_card_content and (not title or title == "No Title Available"): # If no title and no abstract/content
+                            if not has_card_content and (not title or title == "No Title Available"): 
                                 st.markdown("<small><em>Content/Abstract not available for this item. Displaying available metadata.</em></small>", unsafe_allow_html=True)
 
 
@@ -594,19 +588,19 @@ with tab_rec:
                             if metadata_parts:
                                 st.markdown(f'<div class="metadata-line">{" | ".join(metadata_parts)}</div>', unsafe_allow_html=True)
                             
-                            st.markdown('</div>', unsafe_allow_html=True) # Close card
-                            if i < len(cleaned_chunks) -1 : st.markdown("---") # Separator between cards
+                            st.markdown('</div>', unsafe_allow_html=True)
+                            if i < len(cleaned_chunks) -1 : st.markdown("---")
 
                             if has_card_content: content_found_in_chunks = True
                     
-                    if not content_found_in_chunks and cleaned_chunks: # If loop ran but no meaningful content was displayed
+                    if not content_found_in_chunks and cleaned_chunks:
                         context_message_placeholder.warning("No primary content (titles, abstracts, or snippets) was found in the retrieved context sources, though metadata might be present. The AI's answer might be less specific.", icon="ℹ️")
-                    elif not cleaned_chunks and st.session_state.llm_answer: # No chunks retrieved at all
+                    elif not cleaned_chunks and st.session_state.llm_answer:
                          context_message_placeholder.info("No specific documents were retrieved from the knowledge base for this query. The AI answered from its general knowledge.", icon="💡")
 
 
                     # Debugging section if no content found in any chunks (original logic retained and slightly enhanced)
-                    if not content_found_in_chunks and st.session_state.raw_context_chunks: # Check raw_context_chunks for debug
+                    if not content_found_in_chunks and st.session_state.raw_context_chunks:
                         with st.expander("🔍 Debug: Retrieved Context Structure (No Displayable Content Found)", expanded=False): # Default to collapsed
                             st.warning("No displayable content (title, abstract, snippet) was found in the retrieved chunks. This could indicate an issue with data extraction, field naming, or the cleaning process. Below is a sample of the raw data for the first chunk:")
                             sample_chunk_debug = st.session_state.raw_context_chunks[0]
@@ -628,7 +622,7 @@ with tab_rec:
                             if st.button("🔄 Force Reload Components & Retry", key="debug_reload_components_context"):
                                 st.session_state.force_component_reload = True
                                 st.rerun()
-            elif st.session_state.llm_answer: # Answer exists but no raw_context_chunks
+            elif st.session_state.llm_answer:
                  st.info("The AI provided an answer, but no specific documents were retrieved from the knowledge base to support it. This might happen if the query was general or the knowledge base is empty/irrelevant.", icon="💡")
 
 

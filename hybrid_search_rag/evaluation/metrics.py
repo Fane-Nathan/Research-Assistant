@@ -6,7 +6,7 @@ of search and recommendation systems.
 """
 import numpy as np
 import math
-from typing import List, Set, Union, Dict # Corrected: Dict imported from typing
+from typing import List, Set, Union, Dict
 
 # --- Helper function for relevance checking ---
 def _is_relevant(doc_id: Union[str, int], relevant_set: Set[Union[str, int]]) -> int:

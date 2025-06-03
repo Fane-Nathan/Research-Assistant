@@ -14,7 +14,6 @@ from nltk.corpus import stopwords
 import string
 import sys
 
-# Assuming GeminiEmbedder is correctly defined and imported
 from ..embedding_services.gemini_embedder import EmbeddingModel as GeminiEmbedder
 
 
@@ -32,7 +31,7 @@ class NltkManager:
     """Manages NLTK data and tokenization, ensuring data is available."""
     NLTK_STOPWORDS: Optional[set[str]] = None
     NLTK_DATA_AVAILABLE: Dict[str, bool] = {'punkt': False, 'stopwords': False}
-    _nltk_checked_init = False # Class variable to ensure check runs only once
+    _nltk_checked_init = False
 
     def __init__(self):
         """Initialize and ensure NLTK data is checked/loaded."""
@@ -57,10 +56,10 @@ class NltkManager:
                 cls.NLTK_DATA_AVAILABLE[name] = True
             except LookupError:
                 cls.NLTK_DATA_AVAILABLE[name] = False
-                if name not in needs_download: # Avoid duplicate download attempts
+                if name not in needs_download:
                     needs_download.append(name)
                     logger.warning(f"NLTK data '{name}' not found. Will attempt download.")
-            except Exception as e: # Catch other potential errors during find
+            except Exception as e:
                 logger.error(f"Error checking NLTK data '{name}': {e}")
                 cls.NLTK_DATA_AVAILABLE[name] = False
 
@@ -79,10 +78,10 @@ class NltkManager:
                     ssl._create_default_https_context = _create_unverified_https_context
 
                 for name in needs_download:
-                    print(f"Downloading NLTK package: {name}...", file=sys.stderr) # Progress to stderr
-                    if nltk.download(name, quiet=True): # Download quietly
+                    print(f"Downloading NLTK package: {name}...", file=sys.stderr) 
+                    if nltk.download(name, quiet=True): 
                         logger.info(f"Successfully initiated download for NLTK data '{name}'. Verifying...")
-                        try: # Verify after download attempt
+                        try: 
                             nltk.data.find(data_to_check[name])
                             cls.NLTK_DATA_AVAILABLE[name] = True
                             download_success_flags[name] = True
@@ -91,19 +90,18 @@ class NltkManager:
                              logger.error(f"Verification failed for NLTK data '{name}' even after download attempt. Package might be corrupted or not found where expected.")
                              cls.NLTK_DATA_AVAILABLE[name] = False
                              download_success_flags[name] = False
-                    else: # nltk.download returned False
+                    else: 
                         logger.error(f"NLTK download command failed for '{name}'.")
                         cls.NLTK_DATA_AVAILABLE[name] = False
                         download_success_flags[name] = False
-            except Exception as e: # Catch errors during the download process itself
+            except Exception as e:
                 logger.error(f"NLTK download process failed: {e}", exc_info=True)
-                for name_in_error_case in needs_download: # Mark all as failed if download process crashes
+                for name_in_error_case in needs_download: 
                      if name_in_error_case not in download_success_flags:
                           cls.NLTK_DATA_AVAILABLE[name_in_error_case] = False
             
-            # Consolidate failed downloads for reporting
             final_failed_downloads = [name for name, success in download_success_flags.items() if not success]
-            for name_to_check in needs_download: # Ensure all initially needed items are accounted for
+            for name_to_check in needs_download:
                 if name_to_check not in download_success_flags and name_to_check not in final_failed_downloads:
                     final_failed_downloads.append(name_to_check)
 
@@ -114,19 +112,17 @@ class NltkManager:
                      print(f"  >>> import nltk; nltk.download('{name_failed}')", file=sys.stderr)
                  print("Keyword search and tokenization functionality may be impaired.", file=sys.stderr)
 
-        # Load stopwords if available
         if cls.NLTK_DATA_AVAILABLE['stopwords'] and cls.NLTK_STOPWORDS is None:
             try:
                 cls.NLTK_STOPWORDS = set(stopwords.words('english'))
                 logger.info(f"Loaded {len(cls.NLTK_STOPWORDS)} NLTK English stopwords.")
             except Exception as e:
                 logger.error(f"Failed to load NLTK stopwords even though data seems available: {e}", exc_info=True)
-                cls.NLTK_STOPWORDS = set() # Use empty set on error
+                cls.NLTK_STOPWORDS = set() 
         elif not cls.NLTK_DATA_AVAILABLE['stopwords'] and initial_availability['stopwords']:
-             # This case means stopwords were available, but became unavailable (e.g., deleted during runtime)
              logger.warning("NLTK stopwords data became unavailable after initial check. Using empty set for stopwords.")
              cls.NLTK_STOPWORDS = set()
-        elif cls.NLTK_STOPWORDS is None: # Still None after checks (e.g., download failed)
+        elif cls.NLTK_STOPWORDS is None: 
             logger.warning("NLTK stopwords data not available. Stopword removal will be skipped if requested.")
             cls.NLTK_STOPWORDS = set()
 
@@ -143,31 +139,27 @@ class NltkManager:
 
         if not cls.NLTK_DATA_AVAILABLE['punkt']:
             logger.warning("NLTK 'punkt' (tokenizer) data not available. Attempting to re-check/load...")
-            cls._check_and_load_nltk_data() # Attempt to load again if it failed initially
+            cls._check_and_load_nltk_data() 
             if not cls.NLTK_DATA_AVAILABLE['punkt']:
                 logger.error("NLTK 'punkt' data is unavailable even after re-check! Cannot tokenize text. Returning empty list.")
                 return []
 
-        # Ensure stopwords are loaded if removal is requested
-        if remove_stopwords and cls.NLTK_STOPWORDS is None: # Should have been loaded by __init__ or _check_and_load
+        if remove_stopwords and cls.NLTK_STOPWORDS is None:
                  logger.debug("Stopwords requested but NLTK_STOPWORDS is None; re-checking data.")
-                 cls._check_and_load_nltk_data() # One last attempt
+                 cls._check_and_load_nltk_data()
 
         try:
-            # Preprocessing: lowercase, remove punctuation
             processed_text = text.lower()
             processed_text = processed_text.translate(str.maketrans('', '', string.punctuation))
             tokens = nltk.word_tokenize(processed_text)
 
-            # Remove stopwords if requested and available
-            if remove_stopwords and cls.NLTK_STOPWORDS: # Check NLTK_STOPWORDS is not None and not empty
+            if remove_stopwords and cls.NLTK_STOPWORDS: 
                 tokens = [word for word in tokens if word not in cls.NLTK_STOPWORDS]
-            elif remove_stopwords: # Stopwords requested but not available
+            elif remove_stopwords:
                 logger.debug("Stopword removal requested, but no stopwords loaded. Skipping removal.")
 
-            # Filter by minimum word length
             return [word for word in tokens if len(word) >= min_word_length]
-        except Exception as e: # Catch errors during tokenization steps
+        except Exception as e: 
             logger.error(f"Tokenization failed for text snippet: '{text[:50]}...': {e}", exc_info=True)
             return []
 
@@ -177,7 +169,7 @@ class HybridRecommender:
     def __init__(self, embed_model: GeminiEmbedder):
         """Initializes with a pre-configured EmbeddingModel instance."""
         self.embed_model = embed_model
-        self.nltk_manager = NltkManager() # Initialize NltkManager
+        self.nltk_manager = NltkManager() 
         logger.info(f"HybridRecommender initialized with embedding model: {type(embed_model).__name__}")
 
     def _validate_embeddings(self, query_embedding: Optional[np.ndarray], resource_embeddings: Optional[np.ndarray]) -> bool:
@@ -196,7 +188,6 @@ class HybridRecommender:
             logger.warning(f"Embeddings validation failed: resource_embeddings size is 0.")
             return False
 
-        # Ensure query_embedding is 2D for cosine_similarity
         query_embedding_2d = query_embedding.reshape(1, -1) if query_embedding.ndim == 1 else query_embedding
         
         if query_embedding_2d.ndim != 2 or query_embedding_2d.shape[0] != 1:
@@ -213,7 +204,7 @@ class HybridRecommender:
     def _validate_keyword_search_inputs(self, query: str, bm25_index: Optional[BM25Okapi]) -> Tuple[bool, List[str]]:
         """Helper function to validate inputs for keyword search."""
         if bm25_index is None:
-            logger.info("BM25 index is None. Skipping keyword search.") # Changed to info as it's an expected case
+            logger.info("BM25 index is None. Skipping keyword search.")
             return False, []
 
         tokenized_query = self.nltk_manager.tokenize_text(query, remove_stopwords=True, min_word_length=2)
@@ -227,19 +218,15 @@ class HybridRecommender:
         if not self._validate_embeddings(query_embedding, resource_embeddings):
             return []
         
-        # --- Assertions to help Pylance with type narrowing ---
         assert query_embedding is not None, "Query embedding should be validated by _validate_embeddings"
         assert resource_embeddings is not None, "Resource embeddings should be validated by _validate_embeddings"
-        # --- End Assertions ---
 
         if top_n <= 0:
             logger.warning(f"Semantic search top_n is {top_n}, must be positive. Returning empty list.")
             return []
         try:
-            # query_embedding is now guaranteed not None and validated for basic shape by _validate_embeddings
             query_embedding_2d = query_embedding.reshape(1, -1) if query_embedding.ndim == 1 else query_embedding
             
-            # resource_embeddings is also guaranteed not None and validated
             similarities = cosine_similarity(query_embedding_2d, resource_embeddings)[0]
             
             num_docs_in_corpus = resource_embeddings.shape[0]
@@ -264,18 +251,15 @@ class HybridRecommender:
         if not valid_inputs: 
             return []
         
-        # --- Assertion for Pylance ---
         assert bm25_index is not None, "BM25 index should be validated by _validate_keyword_search_inputs"
-        # --- End Assertion ---
 
         if top_n <= 0:
             logger.warning(f"Keyword search top_n is {top_n}, must be positive. Returning empty list.")
             return []
         try:
-            # bm25_index is now guaranteed not None
             doc_scores = bm25_index.get_scores(tokenized_query)
 
-            num_results_to_fetch = min(top_n, len(doc_scores)) # Use len(doc_scores) instead of num_docs_in_corpus for BM25 results
+            num_results_to_fetch = min(top_n, len(doc_scores))
             if num_results_to_fetch <= 0:
                 return []
 
@@ -289,6 +273,8 @@ class HybridRecommender:
              logger.error(f"Error during keyword search: {e}", exc_info=True)
              return []
     
+    # Reciprocal Rank Fusion (RRF) implementation
+
     def _reciprocal_rank_fusion(self, ranked_lists: List[List[Tuple[int, float]]], k_rrf: int = 60) -> Dict[int, float]:
         """Combines multiple ranked lists using Reciprocal Rank Fusion (RRF)."""
         fused_scores: Dict[int, float] = {}
@@ -297,16 +283,16 @@ class HybridRecommender:
 
         logger.debug(f"Performing RRF (k_rrf={k_rrf}) on {len(ranked_lists)} lists...")
         for rank_list in ranked_lists:
-            if not rank_list: continue # Skip empty lists
-            seen_indices_in_this_list = set() # To handle potential duplicates within a single list
+            if not rank_list: continue
+            seen_indices_in_this_list = set()
             for rank, item in enumerate(rank_list):
                 try:
-                    doc_index, _score = item # Unpack score even if not used directly in RRF formula
+                    doc_index, _score = item
                 except (TypeError, ValueError) as e:
                     logger.warning(f"Skipping malformed item in rank_list during RRF: {item}. Error: {e}")
                     continue
 
-                if isinstance(doc_index, (int, np.integer)) and doc_index >= 0: # Check type and non-negativity
+                if isinstance(doc_index, (int, np.integer)) and doc_index >= 0:
                     doc_index_int = int(doc_index)
                     if doc_index_int not in seen_indices_in_this_list:
                         # RRF formula: 1 / (k + rank). Rank is 0-indexed here, so rank + 1 for 1-based ranking.
@@ -338,14 +324,13 @@ class HybridRecommender:
         logger.debug(f"Recommendation params: {params}")
 
         query_embedding: Optional[np.ndarray] = None
-        if self.embed_model and resource_embeddings is not None: # Check if embeddings are available
+        if self.embed_model and resource_embeddings is not None:
             try:
-                # Corrected method call and added task_type
                 query_embedding = self.embed_model.encode(query, task_type="RETRIEVAL_QUERY")
                 logger.debug(f"Query embedding generated with shape: {query_embedding.shape if query_embedding is not None else 'None'}")
             except Exception as e:
                 logger.error(f"Failed to generate query embedding: {e}", exc_info=True)
-                query_embedding = None # Ensure it's None on failure
+                query_embedding = None 
         elif not self.embed_model:
             logger.info("No embedding model provided. Skipping semantic search.")
         elif resource_embeddings is None:
@@ -398,7 +383,7 @@ class HybridRecommender:
                 continue
             processed_indices.add(doc_index)
 
-            if 0 <= doc_index < num_docs_in_corpus: # Use num_docs_in_corpus consistently
+            if 0 <= doc_index < num_docs_in_corpus:
                 metadata_item = resource_metadata[doc_index]
                 
                 # CRITICAL CHECK: Ensure either 'entry_id' or 'arxiv_entry_id' key exists, or try to derive from URL
@@ -408,14 +393,13 @@ class HybridRecommender:
 
                 if not entry_id and not arxiv_entry_id:
                     if doc_url and isinstance(doc_url, str):
-                        # Attempt to derive an ID from the URL
                         try:
                             # Example: 'http://arxiv.org/pdf/2410.12837v1' -> '2410.12837v1'
                             derived_id = doc_url.split('/')[-1]
                             if derived_id:
                                 logger.warning(f"Document at index {doc_index} missing 'entry_id' and 'arxiv_entry_id'. Using derived ID '{derived_id}' from URL: {doc_url}")
-                                metadata_item['entry_id'] = derived_id # Add the derived ID to the metadata
-                                entry_id = derived_id # Use it for current processing
+                                metadata_item['entry_id'] = derived_id
+                                entry_id = derived_id
                             else:
                                 logger.error(f"Document at index {doc_index} in resource_metadata is missing 'entry_id', 'arxiv_entry_id', and could not derive a valid ID from URL '{doc_url}'. Metadata: {metadata_item}. Skipping this item.")
                                 continue
@@ -424,10 +408,10 @@ class HybridRecommender:
                             continue
                     else:
                         logger.error(f"Document at index {doc_index} in resource_metadata is missing 'entry_id', 'arxiv_entry_id', and has no valid 'url' to derive an ID. Metadata: {metadata_item}. Skipping this item.")
-                        continue # Skip this item as it cannot be processed correctly downstream
-
+                        continue
+                    
                 # Use entry_id if available, otherwise fall back to arxiv_entry_id
-                doc_id_for_log = entry_id or arxiv_entry_id or f"[No ID at index {doc_index}]" # Updated to include derived ID possibility
+                doc_id_for_log = entry_id or arxiv_entry_id or f"[No ID at index {doc_index}]"
                 title_for_log = metadata_item.get('title', f"[No Title - ID: {doc_id_for_log}]")
                 logger.debug(f"  Considering doc index {doc_index} (ID: {doc_id_for_log}, Title: \\\'{title_for_log}\\\') with RRF score {score:.4f}")
                 final_recommendations.append((metadata_item, score))
@@ -438,4 +422,4 @@ class HybridRecommender:
                 break
         
         logger.info(f"Returning {len(final_recommendations)} final recommendations (top_n_final={params.top_n_final}).")
-        return final_recommendations[:params.top_n_final] # Ensure we don't exceed top_n_final
+        return final_recommendations[:params.top_n_final]

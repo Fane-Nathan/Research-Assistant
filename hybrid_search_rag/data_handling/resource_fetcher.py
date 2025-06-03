@@ -68,17 +68,13 @@ def _clean_text(text: Optional[str]) -> Optional[str]:
         # _module_logger.debug("Helper_CleanText: Input is None.") # Debug, can be noisy
         return None
     try:
-        # First, fix encoding issues that often occur in PDF text extraction
-        # Replace common character problems seen in academic papers
-        text = text.replace('\\t', ' ')  # Replace tab characters
+        text = text.replace('\\t', ' ')  
         
-        # Fix common PDF extraction character issues
         char_replacements = {
-            # Common PDF extraction artifacts
-            '�': '',       # Remove replacement character
-            '\ufb01': 'fi', # Fix common ligatures
+            '�': '',       
+            '\ufb01': 'fi',
             '\ufb02': 'fl',
-            '\u2019': "'", # Smart quotes and apostrophes
+            '\u2019': "'", 
             '\u201c': '"',
             '\u201d': '"',
             # Fix typical arXiv paper issues with space insertion 
@@ -100,7 +96,6 @@ def _clean_text(text: Optional[str]) -> Optional[str]:
         for old, new in char_replacements.items():
             text = text.replace(old, new)
         
-        # Process the text for spacing and newlines
         text_no_extra_spaces = re.sub(r'[ \t]+', ' ', text)
         lines = text_no_extra_spaces.splitlines()
         cleaned_lines = [line.strip() for line in lines if line.strip()]
@@ -108,17 +103,14 @@ def _clean_text(text: Optional[str]) -> Optional[str]:
         if not cleaned_lines:
             return None
             
-        # Join lines with newline (using proper \n, not \\n)
         text_joined_lines = "\n".join(cleaned_lines)
-        # Remove excessive newlines (using proper \n, not \\n)
         text_no_extra_newlines = re.sub(r'\n{3,}', '\n\n', text_joined_lines)
         cleaned_text = text_no_extra_newlines.strip()
         
-        # Final check - verify we have actual content
         return cleaned_text if cleaned_text else None
     except Exception as e:
-        _module_logger.error(f"Helper_CleanText: Error cleaning text: {e}", exc_info=False) # exc_info=False for less verbose error
-        return text # Return original on error to preserve some data
+        _module_logger.error(f"Helper_CleanText: Error cleaning text: {e}", exc_info=False)
+        return text 
 
 def _parse_pdf_content(pdf_bytes: bytes, source_url: str) -> Optional[str]:
     _module_logger.debug(f"Helper_ParsePDF: Attempting to parse PDF from {source_url} ({len(pdf_bytes)} bytes)")
@@ -129,21 +121,15 @@ def _parse_pdf_content(pdf_bytes: bytes, source_url: str) -> Optional[str]:
                 _module_logger.warning(f"Helper_ParsePDF: PDF is encrypted and cannot be opened: {source_url}")
                 return None
                 
-            # Process each page with enhanced text extraction
             for page_num in range(len(doc)):
                 page = doc.load_page(page_num)
                 try:
-                    # Try different text extraction modes if available
                     page_text = page.get_text("text")  # type: ignore # Basic text mode
                     
-                    # If text seems garbled (common with academic papers), try other modes
                     if page_text and len(page_text) > 100:
-                        # Check for common signs of encoding issues
-                        if page_text.count(' ') / len(page_text) > 0.4:  # Too many spaces
-                            # Try alternative extraction modes
+                        if page_text.count(' ') / len(page_text) > 0.4:
                             blocks = page.get_text("blocks") # type: ignore
                             if blocks:
-                                # Extract and join block text with better formatting
                                 block_texts = [b[4] for b in blocks if len(b) > 4]
                                 page_text = "\n".join(block_texts)
                     
@@ -151,13 +137,12 @@ def _parse_pdf_content(pdf_bytes: bytes, source_url: str) -> Optional[str]:
                         pdf_text_parts.append(page_text.strip())
                 except Exception as page_e:
                     _module_logger.error(f"Helper_ParsePDF: Error extracting text from page {page_num}: {page_e}")
-                    continue  # Try next page
+                    continue
         
         if not pdf_text_parts:
             _module_logger.warning(f"Helper_ParsePDF: No text parts extracted from PDF pages: {source_url}")
             return None
 
-        # Join with proper newlines, not escaped newlines
         full_pdf_text = "\n\n".join(filter(None, pdf_text_parts))
         cleaned_text = _clean_text(full_pdf_text)
         
@@ -166,7 +151,7 @@ def _parse_pdf_content(pdf_bytes: bytes, source_url: str) -> Optional[str]:
         else:
             _module_logger.info(f"Helper_ParsePDF: Successfully parsed PDF {source_url}, extracted text length: {len(cleaned_text)}")
         return cleaned_text
-    except Exception as e: # Catching fitz specific errors might be good too if known
+    except Exception as e:
         _module_logger.error(f"Helper_ParsePDF: PDF processing failed for {source_url}: {e}", exc_info=True)
         return None
 
@@ -176,7 +161,7 @@ class ResourceFetcher:
         self._configure_logging() 
         self.logger.info(f"ResourceFetcher.__init__ - Playwright for PDFs: {use_playwright_for_pdfs}, Timeout: {timeout}")
 
-        self.timeout = timeout # General timeout for operations if not overridden
+        self.timeout = timeout 
         self.cache_dir = cache_dir 
         self.rate_limiter = rate_limiter 
 
@@ -190,18 +175,14 @@ class ResourceFetcher:
         self._playwright_init_attempted = False
 
         if self.use_playwright_for_pdfs:
-            # Check if we're in an async context (event loop running)
             try:
                 import asyncio
                 try:
                     asyncio.get_running_loop()
-                    # We're in an async context, defer Playwright initialization
                     self.logger.info("ResourceFetcher.__init__ - Detected async context. Deferring Playwright initialization until needed.")
                 except RuntimeError:
-                    # No event loop running, safe to initialize sync Playwright now
                     self._init_playwright_sync()
             except ImportError:
-                # asyncio not available, proceed with sync initialization
                 self._init_playwright_sync()
         else:
             self.logger.info("ResourceFetcher.__init__ - Synchronous Playwright for PDF fetching is disabled.")
@@ -246,7 +227,7 @@ class ResourceFetcher:
                 accept_downloads=True 
             )
             self.logger.info("ResourceFetcher._init_playwright_sync - Sync Playwright context created successfully.")
-        except PlaywrightSyncError as pse: # Catch specific Playwright error
+        except PlaywrightSyncError as pse: 
             self.logger.error(f"ResourceFetcher._init_playwright_sync - Failed to initialize synchronous Playwright (Playwright Error): {pse}", exc_info=True)
             self._cleanup_playwright_sync() 
         except Exception as e:
@@ -278,20 +259,16 @@ class ResourceFetcher:
         self.logger.info("ResourceFetcher._cleanup_playwright_sync - Synchronous Playwright resources have been reset/cleaned up.")
 
     def _fetch_pdf_content_with_playwright_sync(self, pdf_url: str, verbose: bool = False) -> Optional[str]:
-        # Try to initialize Playwright if not already done and we're allowed to use it
         if self.use_playwright_for_pdfs and not self.playwright_context and not self._playwright_init_attempted:
             try:
                 import asyncio
                 try:
                     asyncio.get_running_loop()
-                    # We're in an async context, don't try to initialize sync Playwright
                     self.logger.warning(f"Cannot initialize sync Playwright in async context. Skipping PDF fetch with Playwright: {pdf_url}")
                     return None
                 except RuntimeError:
-                    # No event loop running, safe to initialize sync Playwright now
                     self._init_playwright_sync()
             except ImportError:
-                # asyncio not available, proceed with sync initialization
                 self._init_playwright_sync()
         
         if not self.playwright_context:

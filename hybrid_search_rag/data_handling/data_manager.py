@@ -157,16 +157,15 @@ class DataManager:
             try:
                 logger.info(f"Loading embeddings from {self.embeddings_path}")
                 embeddings = np.load(self.embeddings_path, allow_pickle=False)
-                # Sanity check: Compare loaded embeddings count with metadata count.
                 if metadata and embeddings is not None and len(metadata) != embeddings.shape[0]:
                     logger.error(f"Data mismatch: Metadata count ({len(metadata)}) differs from loaded embeddings count ({embeddings.shape[0]}). Discarding embeddings.")
-                    embeddings = None # Invalidate due to mismatch.
+                    embeddings = None
                 elif metadata and embeddings is not None:
                     logger.info(f"Loaded embeddings with shape: {embeddings.shape}.")
-                else: # Should not happen if metadata loading is mandatory
+                else:
                     logger.error("Loaded embeddings but metadata is invalid?! Discarding embeddings.")
                     embeddings = None
-            except (IOError, ValueError) as e: # Handles file read errors or corrupt .npy files
+            except (IOError, ValueError) as e:
                 logger.error(f"Failed to load embeddings file (corrupt?): {e}")
                 embeddings = None
             except Exception as e:

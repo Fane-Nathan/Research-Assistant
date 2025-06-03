@@ -33,7 +33,7 @@ try:
     from google.api_core.exceptions import ResourceExhausted as _RealGoogleResourceExhausted
     from google.api_core.exceptions import GoogleAPICallError as _RealGoogleAPICallError, InvalidArgument as _RealInvalidArgument
     
-    genai = genai_sdk # Assign to the global 'genai'
+    genai = genai_sdk 
     GoogleResourceExhausted = _RealGoogleResourceExhausted
     GoogleAPICallError = _RealGoogleAPICallError
     InvalidArgument = _RealInvalidArgument
@@ -50,7 +50,7 @@ except ImportError:
 
 # --- Groq Specific Imports and Exception Handling ---
 GROQ_AVAILABLE = False
-BaseGroqException = Exception  # Base for Groq exceptions
+BaseGroqException = Exception 
 
 # Runtime placeholders for Groq client and specific exceptions
 Groq: Any = None
