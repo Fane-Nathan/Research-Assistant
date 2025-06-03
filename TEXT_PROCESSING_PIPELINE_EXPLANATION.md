@@ -118,6 +118,9 @@ CleaningLevel.AGGRESSIVE:  # + Aggressive punctuation removal + Stemming
 
 **Core Technology**: NLTK with pre-trained punkt sentence tokenizers
 
+**Sentence Tokenization**: Punkt is a data-driven sentence tokenizer, meaning it uses machine learning techniques and models to identify sentence boundaries in text. This process is crucial in Natural Language Processing (NLP) as it prepares raw text for further analysis. 
+
+
 **Features**:
 - **Multi-language Support**: Punkt tokenizers for English, German, French, Spanish
 - **Sentence Segmentation**: Academic-aware sentence boundary detection
