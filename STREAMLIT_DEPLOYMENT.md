@@ -1,6 +1,14 @@
 # Streamlit Cloud Deployment Guide
 
-## 🚀 Quick Start
+## ✅ **DEPLOYED SUCCESSFULLY**
+
+**Live Application:** [https://research-assistant-flx.streamlit.app/](https://research-assistant-flx.streamlit.app/)
+
+The Research Assistant is now live and fully functional on Streamlit Cloud!
+
+---
+
+## 🚀 Quick Start (For Future Deployments)
 
 ### Step 1: Repository Setup
 1. Push your code to GitHub (ensure all files are committed)

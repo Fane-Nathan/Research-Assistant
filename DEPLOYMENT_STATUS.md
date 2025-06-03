@@ -1,9 +1,11 @@
 # 🚀 Research Assistant - Deployment Status
 
-## ✅ **DEPLOYMENT READY** - All Systems Green!
+## ✅ **DEPLOYMENT SUCCESSFUL** - Live and Running!
+
+**Live Demo:** [https://research-assistant-flx.streamlit.app/](https://research-assistant-flx.streamlit.app/)
 
 **Last Updated:** May 28, 2025  
-**Status:** Ready for Streamlit Cloud deployment
+**Status:** Successfully deployed to Streamlit Cloud
 
 ---
 

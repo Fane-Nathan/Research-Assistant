@@ -44,7 +44,7 @@
 ## New Organized Structure
 
 ```
-StudyAssistant/
+Research-Assistant/
 ├── scripts/                 # All CLI scripts at top level
 │   ├── cli.py              # Main CLI (moved from interfaces/)
 │   ├── bootstrap_evaluation_set.py      # Moved from evaluation_prep/

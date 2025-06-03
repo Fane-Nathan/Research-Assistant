@@ -2,6 +2,16 @@
 
 StudyAssistant is a command-line tool designed to assist with research and learning by fetching information from arXiv and the web, processing it using advanced NLP techniques (chunking, embeddings, BM25), and providing answers or summaries through Retrieval-Augmented Generation (RAG) powered by Large Language Models (LLMs). It features hybrid search (semantic + keyword) and configurable RAG modes.
 
+## 🌐 Live Demo
+
+**Try the live web interface:** [https://research-assistant-flx.streamlit.app/](https://research-assistant-flx.streamlit.app/)
+
+Experience the full functionality of StudyAssistant through our interactive web interface, including:
+- Research paper search and analysis
+- Hybrid search capabilities 
+- Real-time RAG-powered question answering
+- Document processing and knowledge base management
+
 ## Features
 
 * **Data Fetching:**

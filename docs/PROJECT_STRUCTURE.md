@@ -1,12 +1,15 @@
-# StudyAssistant Project Structure
+# Research Assistant Project Structure
 
 ## Overview
-This document describes the organized structure of the StudyAssistant project after reorganization.
+This document describes the organized structure of the Research Assistant project after reorganization.
+
+## 🌐 Live Demo
+**Web Interface:** [https://research-assistant-flx.streamlit.app/](https://research-assistant-flx.streamlit.app/)
 
 ## Root Directory Structure
 
 ```
-StudyAssistant/
+Research-Assistant/
 ├── README.md                 # Main project documentation
 ├── requirements.txt          # Python dependencies
 ├── packages.txt             # System packages (for dev containers)
