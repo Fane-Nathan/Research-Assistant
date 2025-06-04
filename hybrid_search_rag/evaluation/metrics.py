@@ -6,7 +6,8 @@ of search and recommendation systems.
 """
 import numpy as np
 import math
-from typing import List, Set, Union, Dict
+import random
+from typing import List, Set, Union, Dict, Any
 
 # --- Helper function for relevance checking ---
 def _is_relevant(doc_id: Union[str, int], relevant_set: Set[Union[str, int]]) -> int:
@@ -293,52 +294,534 @@ def ndcg_at_k(
     return current_dcg / ideal_dcg
 
 
-# --- Example Usage (for testing purposes) ---
-if __name__ == '__main__':
-    # Example data for a single query
-    retrieved_ids_example: List[Union[str,int]] = ["docA", "docB", "docC", "docD", "docE", "docF", "docG"]
-    relevant_set_example: Set[Union[str,int]] = {"docA", "docC", "docE", "docH", "docI"} 
+# --- Additional Advanced Metrics ---
 
-    true_relevances_example: Dict[Union[str,int], float] = {
-        "docA": 3.0, "docB": 1.0, "docC": 2.0, "docD": 0.0, "docE": 3.0,
-        "docF": 0.0, "docG": 1.0, "docH": 3.0, "docI": 2.0, "docJ": 0.0 
-    }
-    k_val_example = 5
+# === EMBEDDING QUALITY METRICS ===
 
-    print(f"--- Metrics for K={k_val_example} ---")
-
-    p_at_k = precision_at_k(retrieved_ids_example, relevant_set_example, k_val_example)
-    print(f"Precision@{k_val_example}: {p_at_k:.4f}") # Expected: 3/5 = 0.6
-
-    r_at_k = recall_at_k(retrieved_ids_example, relevant_set_example, k_val_example)
-    print(f"Recall@{k_val_example}: {r_at_k:.4f}") # Expected: 3/5 = 0.6
-
-    ap_score = average_precision(retrieved_ids_example, relevant_set_example)
-    print(f"Average Precision (AP): {ap_score:.4f}") # Expected: (1/1 * 1 + 2/3 * 1 + 3/5 * 1) / 5 = (1 + 0.6667 + 0.6) / 5 = 2.2667 / 5 = 0.4533
-
-    # For nDCG@K
-    # Scores for retrieved top 5: [A:3, B:1, C:2, D:0, E:3]
-    retrieved_rels_for_ndcg_example = [true_relevances_example.get(doc_id, 0.0) for doc_id in retrieved_ids_example[:k_val_example]]
+def embedding_similarity_distribution(
+    query_embeddings: List[np.ndarray],
+    doc_embeddings: List[np.ndarray],
+    labels: Union[List[int], np.ndarray] = None
+) -> Dict[str, float]:
+    """
+    Analyzes the distribution of cosine similarities between query and document embeddings.
+    Useful for understanding embedding space quality and separation between relevant/irrelevant docs.
     
-    dcg_val = dcg_at_k(retrieved_rels_for_ndcg_example, k_val_example) # k_val_example matches length
-    print(f"DCG@{k_val_example}: {dcg_val:.4f}") 
-    # DCG@5 for [3,1,2,0,3]
-    # 3/log2(0+2) + 1/log2(1+2) + 2/log2(2+2) + 0/log2(3+2) + 3/log2(4+2)
-    # 3/log2(2) + 1/log2(3) + 2/log2(4) + 0/log2(5) + 3/log2(6)
-    # 3/1 + 1/1.58496 + 2/2 + 0/2.3219 + 3/2.58496
-    # 3 + 0.6309 + 1 + 0 + 1.1605 = 5.7914
+    Args:
+        query_embeddings: List of query embedding vectors
+        doc_embeddings: List of document embedding vectors  
+        labels: Optional list of relevance labels (1 for relevant, 0 for irrelevant)
+    
+    Returns:
+        Dictionary with similarity statistics
+    """
+    if len(query_embeddings) != len(doc_embeddings):
+        raise ValueError("Query and document embedding lists must have same length")
+    
+    similarities = []
+    for q_emb, d_emb in zip(query_embeddings, doc_embeddings):
+        # Normalize embeddings for cosine similarity
+        q_norm = q_emb / np.linalg.norm(q_emb)
+        d_norm = d_emb / np.linalg.norm(d_emb)
+        sim = np.dot(q_norm, d_norm)
+        similarities.append(sim)
+    
+    similarities = np.array(similarities)
+    
+    stats = {
+        'mean_similarity': float(np.mean(similarities)),
+        'std_similarity': float(np.std(similarities)),
+        'min_similarity': float(np.min(similarities)),
+        'max_similarity': float(np.max(similarities)),
+        'median_similarity': float(np.median(similarities))
+    }
+    
+    if labels is not None:
+        labels = np.array(labels)
+        relevant_sims = similarities[labels == 1]
+        irrelevant_sims = similarities[labels == 0]
+        
+        if len(relevant_sims) > 0:
+            stats['mean_relevant_similarity'] = float(np.mean(relevant_sims))
+        if len(irrelevant_sims) > 0:
+            stats['mean_irrelevant_similarity'] = float(np.mean(irrelevant_sims))
+        if len(relevant_sims) > 0 and len(irrelevant_sims) > 0:
+            stats['similarity_separation'] = stats['mean_relevant_similarity'] - stats['mean_irrelevant_similarity']
+    
+    return stats
 
-    all_true_scores_sorted_desc_example = sorted(true_relevances_example.values(), reverse=True)
-    idcg_val = idcg_at_k(all_true_scores_sorted_desc_example, k_val_example)
-    print(f"IDCG@{k_val_example}: {idcg_val:.4f}")
-    # Ideal top 5 relevances: [3.0, 3.0, 3.0, 2.0, 2.0]
-    # IDCG@5 for [3,3,3,2,2]
-    # 3/log2(2) + 3/log2(3) + 3/log2(4) + 2/log2(5) + 2/log2(6)
-    # 3 + 1.8928 + 1.5 + 0.8613 + 0.7737 = 8.0278
 
-    ndcg_val = ndcg_at_k(retrieved_ids_example, true_relevances_example, k_val_example)
-    print(f"nDCG@{k_val_example}: {ndcg_val:.4f}") # Expected: 5.7914 / 8.0278 = 0.7214
+def embedding_space_coverage(
+    embeddings: List[np.ndarray],
+    sample_size: int = 1000
+) -> Dict[str, float]:
+    """
+    Measures how well embeddings cover the semantic space.
+    
+    Args:
+        embeddings: List of embedding vectors
+        sample_size: Number of random pairs to sample for analysis
+        
+    Returns:
+        Dictionary with coverage metrics
+    """
+    if len(embeddings) < 2:
+        return {'mean_pairwise_distance': 0.0, 'std_pairwise_distance': 0.0}
+    
+    # Convert to numpy array for easier manipulation
+    emb_array = np.array(embeddings)
+    
+    # Sample random pairs to avoid O(n²) computation
+    n_embeddings = len(embeddings)
+    n_pairs = min(sample_size, (n_embeddings * (n_embeddings - 1)) // 2)
+    
+    distances = []
+    for _ in range(n_pairs):
+        i, j = random.sample(range(n_embeddings), 2)
+        # Normalize for cosine distance
+        emb_i = emb_array[i] / np.linalg.norm(emb_array[i])
+        emb_j = emb_array[j] / np.linalg.norm(emb_array[j])
+        # Cosine distance = 1 - cosine similarity
+        distance = 1 - np.dot(emb_i, emb_j)
+        distances.append(distance)
+    
+    distances = np.array(distances)
+    
+    return {
+        'mean_pairwise_distance': float(np.mean(distances)),
+        'std_pairwise_distance': float(np.std(distances)),
+        'min_pairwise_distance': float(np.min(distances)),
+        'max_pairwise_distance': float(np.max(distances))
+    }
 
-    # Test MAP
-    map_score = mean_average_precision([ap_score, 0.8, 0.6])
-    print(f"MAP score: {map_score:.4f}") # (0.4533 + 0.8 + 0.6) / 3 = 1.8533 / 3 = 0.6178
+
+# === RANKING QUALITY METRICS ===
+
+def rank_correlation(
+    predicted_ranks: List[int],
+    true_ranks: List[int]
+) -> float:
+    """
+    Calculates Spearman's rank correlation between predicted and true rankings.
+    
+    Args:
+        predicted_ranks: List of predicted rank positions
+        true_ranks: List of true rank positions
+        
+    Returns:
+        Spearman correlation coefficient (-1 to 1)
+    """
+    if len(predicted_ranks) != len(true_ranks):
+        raise ValueError("Predicted and true rank lists must have same length")
+    
+    from scipy.stats import spearmanr
+    correlation, _ = spearmanr(predicted_ranks, true_ranks)
+    return float(correlation) if not np.isnan(correlation) else 0.0
+
+
+def reciprocal_rank(
+    retrieved_doc_ids: List[Union[str, int]],
+    relevant_doc_ids: Set[Union[str, int]]
+) -> float:
+    """
+    Calculates the reciprocal rank of the first relevant document.
+    
+    Args:
+        retrieved_doc_ids: Ordered list of retrieved document IDs
+        relevant_doc_ids: Set of relevant document IDs
+        
+    Returns:
+        Reciprocal rank (1/rank of first relevant doc, 0 if none found)
+    """
+    for i, doc_id in enumerate(retrieved_doc_ids):
+        if doc_id in relevant_doc_ids:
+            return 1.0 / (i + 1)  # i is 0-indexed, rank is 1-indexed
+    return 0.0
+
+
+def mean_reciprocal_rank(reciprocal_ranks: List[float]) -> float:
+    """
+    Calculates Mean Reciprocal Rank (MRR) from a list of reciprocal ranks.
+    
+    Args:
+        reciprocal_ranks: List of reciprocal rank values
+        
+    Returns:
+        Mean reciprocal rank
+    """
+    if not reciprocal_ranks:
+        return 0.0
+    return float(np.mean(reciprocal_ranks))
+
+
+# === RESPONSE GENERATION QUALITY METRICS ===
+
+def bleu_score(reference: str, candidate: str, n_gram: int = 4) -> float:
+    """
+    Calculates BLEU score for response generation quality.
+    Simplified implementation for basic n-gram overlap.
+    
+    Args:
+        reference: Reference (ground truth) text
+        candidate: Generated candidate text
+        n_gram: Maximum n-gram size to consider
+        
+    Returns:
+        BLEU score (0 to 1)
+    """
+    def get_ngrams(text: str, n: int) -> Set[str]:
+        words = text.lower().split()
+        if len(words) < n:
+            return set()
+        return set(' '.join(words[i:i+n]) for i in range(len(words) - n + 1))
+    
+    ref_words = reference.lower().split()
+    cand_words = candidate.lower().split()
+    
+    if not cand_words:
+        return 0.0
+    
+    scores = []
+    for n in range(1, min(n_gram + 1, len(cand_words) + 1)):
+        ref_ngrams = get_ngrams(reference, n)
+        cand_ngrams = get_ngrams(candidate, n)
+        
+        if not cand_ngrams:
+            scores.append(0.0)
+            continue
+            
+        overlap = len(ref_ngrams.intersection(cand_ngrams))
+        precision = overlap / len(cand_ngrams)
+        scores.append(precision)
+    
+    if not scores:
+        return 0.0
+    
+    # Geometric mean of n-gram precisions
+    return float(np.exp(np.mean(np.log(np.array(scores) + 1e-10))))
+
+
+def rouge_l_score(reference: str, candidate: str) -> Dict[str, float]:
+    """
+    Calculates ROUGE-L score based on longest common subsequence.
+    
+    Args:
+        reference: Reference (ground truth) text
+        candidate: Generated candidate text
+        
+    Returns:
+        Dictionary with precision, recall, and F1 scores
+    """
+    def lcs_length(s1: List[str], s2: List[str]) -> int:
+        """Calculate length of longest common subsequence."""
+        m, n = len(s1), len(s2)
+        dp = [[0] * (n + 1) for _ in range(m + 1)]
+        
+        for i in range(1, m + 1):
+            for j in range(1, n + 1):
+                if s1[i-1] == s2[j-1]:
+                    dp[i][j] = dp[i-1][j-1] + 1
+                else:
+                    dp[i][j] = max(dp[i-1][j], dp[i][j-1])
+        
+        return dp[m][n]
+    
+    ref_words = reference.lower().split()
+    cand_words = candidate.lower().split()
+    
+    if not ref_words or not cand_words:
+        return {'precision': 0.0, 'recall': 0.0, 'f1': 0.0}
+    
+    lcs_len = lcs_length(ref_words, cand_words)
+    
+    precision = lcs_len / len(cand_words)
+    recall = lcs_len / len(ref_words)
+    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+    
+    return {
+        'precision': float(precision),
+        'recall': float(recall),
+        'f1': float(f1)
+    }
+
+
+# === HYBRID SEARCH SPECIFIC METRICS ===
+
+def fusion_effectiveness(
+    dense_results: List[Union[str, int]],
+    sparse_results: List[Union[str, int]], 
+    fused_results: List[Union[str, int]],
+    relevant_doc_ids: Set[Union[str, int]],
+    k: int = 10
+) -> Dict[str, float]:
+    """
+    Measures how effectively the fusion algorithm combines dense and sparse retrieval.
+    
+    Args:
+        dense_results: Results from dense/semantic retrieval
+        sparse_results: Results from sparse/keyword retrieval  
+        fused_results: Results from fusion algorithm
+        relevant_doc_ids: Set of relevant document IDs
+        k: Number of top results to evaluate
+        
+    Returns:
+        Dictionary comparing effectiveness of different approaches
+    """
+    dense_p_at_k = precision_at_k(dense_results, relevant_doc_ids, k)
+    sparse_p_at_k = precision_at_k(sparse_results, relevant_doc_ids, k) 
+    fused_p_at_k = precision_at_k(fused_results, relevant_doc_ids, k)
+    
+    dense_r_at_k = recall_at_k(dense_results, relevant_doc_ids, k)
+    sparse_r_at_k = recall_at_k(sparse_results, relevant_doc_ids, k)
+    fused_r_at_k = recall_at_k(fused_results, relevant_doc_ids, k)
+    
+    return {
+        'dense_precision_at_k': dense_p_at_k,
+        'sparse_precision_at_k': sparse_p_at_k,
+        'fused_precision_at_k': fused_p_at_k,
+        'precision_improvement_over_dense': fused_p_at_k - dense_p_at_k,
+        'precision_improvement_over_sparse': fused_p_at_k - sparse_p_at_k,
+        
+        'dense_recall_at_k': dense_r_at_k,
+        'sparse_recall_at_k': sparse_r_at_k, 
+        'fused_recall_at_k': fused_r_at_k,
+        'recall_improvement_over_dense': fused_r_at_k - dense_r_at_k,
+        'recall_improvement_over_sparse': fused_r_at_k - sparse_r_at_k,
+        
+        'fusion_effectiveness_score': (fused_p_at_k + fused_r_at_k) / 2
+    }
+
+
+def retrieval_diversity(
+    retrieved_doc_ids: List[Union[str, int]],
+    doc_embeddings_map: Dict[Union[str, int], np.ndarray],
+    k: int = 10
+) -> float:
+    """
+    Measures diversity of retrieved results based on embedding similarity.
+    
+    Args:
+        retrieved_doc_ids: List of retrieved document IDs
+        doc_embeddings_map: Map from document ID to embedding vector
+        k: Number of top results to evaluate
+        
+    Returns:
+        Diversity score (higher = more diverse)
+    """
+    top_k_ids = retrieved_doc_ids[:k]
+    
+    if len(top_k_ids) < 2:
+        return 0.0
+    
+    # Get embeddings for top-k documents
+    embeddings = []
+    for doc_id in top_k_ids:
+        if doc_id in doc_embeddings_map:
+            embeddings.append(doc_embeddings_map[doc_id])
+    
+    if len(embeddings) < 2:
+        return 0.0
+    
+    # Calculate pairwise similarities
+    similarities = []
+    for i in range(len(embeddings)):
+        for j in range(i + 1, len(embeddings)):
+            emb_i = embeddings[i] / np.linalg.norm(embeddings[i])
+            emb_j = embeddings[j] / np.linalg.norm(embeddings[j])
+            sim = np.dot(emb_i, emb_j)
+            similarities.append(sim)
+    
+    # Diversity is inverse of average similarity
+    avg_similarity = np.mean(similarities)
+    return float(1.0 - avg_similarity)
+
+
+# === COMPREHENSIVE EVALUATION METRICS CLASS ===
+
+class ComprehensiveMetrics:
+    """
+    A comprehensive metrics calculator that computes all evaluation metrics.
+    """
+    
+    def __init__(self):
+        self.metrics = {}
+    
+    def calculate_all_ir_metrics(
+        self,
+        retrieved_doc_ids: List[Union[str, int]],
+        relevant_doc_ids: Set[Union[str, int]],
+        relevance_scores_map: Dict[Union[str, int], float] = None,
+        k_values: List[int] = [5, 10, 20]
+    ) -> Dict[str, Any]:
+        """Calculate all information retrieval metrics."""
+        
+        results = {}
+        
+        # Basic metrics for each k
+        for k in k_values:
+            results[f'precision_at_{k}'] = precision_at_k(retrieved_doc_ids, relevant_doc_ids, k)
+            results[f'recall_at_{k}'] = recall_at_k(retrieved_doc_ids, relevant_doc_ids, k)
+            
+            if relevance_scores_map:
+                results[f'ndcg_at_{k}'] = ndcg_at_k(retrieved_doc_ids, relevance_scores_map, k)
+        
+        # Single-value metrics
+        results['average_precision'] = average_precision(retrieved_doc_ids, relevant_doc_ids)
+        results['reciprocal_rank'] = reciprocal_rank(retrieved_doc_ids, relevant_doc_ids)
+        
+        return results
+    
+    def calculate_embedding_metrics(
+        self,
+        query_embeddings: List[np.ndarray],
+        doc_embeddings: List[np.ndarray], 
+        relevance_labels: List[int] = None
+    ) -> Dict[str, Any]:
+        """Calculate embedding quality metrics."""
+        
+        results = {}
+        
+        # Similarity distribution analysis
+        sim_stats = embedding_similarity_distribution(
+            query_embeddings, doc_embeddings, relevance_labels
+        )
+        results.update({f'embedding_{k}': v for k, v in sim_stats.items()})
+        
+        # Embedding space coverage
+        coverage_stats = embedding_space_coverage(doc_embeddings)
+        results.update({f'coverage_{k}': v for k, v in coverage_stats.items()})
+        
+        return results
+    
+    def calculate_response_quality_metrics(
+        self,
+        reference_texts: List[str],
+        generated_texts: List[str]
+    ) -> Dict[str, Any]:
+        """Calculate response generation quality metrics."""
+        
+        if len(reference_texts) != len(generated_texts):
+            raise ValueError("Reference and generated text lists must have same length")
+        
+        bleu_scores = []
+        rouge_scores = {'precision': [], 'recall': [], 'f1': []}
+        
+        for ref, gen in zip(reference_texts, generated_texts):
+            bleu_scores.append(bleu_score(ref, gen))
+            rouge = rouge_l_score(ref, gen)
+            rouge_scores['precision'].append(rouge['precision'])
+            rouge_scores['recall'].append(rouge['recall'])
+            rouge_scores['f1'].append(rouge['f1'])
+        
+        return {
+            'mean_bleu_score': float(np.mean(bleu_scores)),
+            'mean_rouge_precision': float(np.mean(rouge_scores['precision'])),
+            'mean_rouge_recall': float(np.mean(rouge_scores['recall'])),
+            'mean_rouge_f1': float(np.mean(rouge_scores['f1']))
+        }
+
+
+# === EVALUATION REPORTING ===
+
+def generate_metrics_report(metrics_dict: Dict[str, Any]) -> str:
+    """
+    Generates a formatted metrics report.
+    
+    Args:
+        metrics_dict: Dictionary containing all calculated metrics
+        
+    Returns:
+        Formatted string report
+    """
+    report = ["=" * 60]
+    report.append("COMPREHENSIVE RETRIEVAL EVALUATION REPORT")
+    report.append("=" * 60)
+    
+    # Information Retrieval Metrics
+    ir_metrics = {k: v for k, v in metrics_dict.items() 
+                  if any(metric in k for metric in ['precision', 'recall', 'ndcg', 'average_precision', 'reciprocal_rank'])}
+    
+    if ir_metrics:
+        report.append("\n📊 INFORMATION RETRIEVAL METRICS")
+        report.append("-" * 40)
+        for metric, value in sorted(ir_metrics.items()):
+            if isinstance(value, float):
+                report.append(f"{metric:.<30} {value:.4f}")
+            else:
+                report.append(f"{metric:.<30} {value}")
+    
+    # Embedding Quality Metrics  
+    embedding_metrics = {k: v for k, v in metrics_dict.items() if 'embedding' in k or 'coverage' in k}
+    
+    if embedding_metrics:
+        report.append("\n🎯 EMBEDDING QUALITY METRICS")
+        report.append("-" * 40)
+        for metric, value in sorted(embedding_metrics.items()):
+            if isinstance(value, float):
+                report.append(f"{metric:.<30} {value:.4f}")
+            else:
+                report.append(f"{metric:.<30} {value}")
+    
+    # Response Quality Metrics
+    response_metrics = {k: v for k, v in metrics_dict.items() 
+                       if any(metric in k for metric in ['bleu', 'rouge'])}
+    
+    if response_metrics:
+        report.append("\n📝 RESPONSE GENERATION METRICS")
+        report.append("-" * 40)
+        for metric, value in sorted(response_metrics.items()):
+            if isinstance(value, float):
+                report.append(f"{metric:.<30} {value:.4f}")
+            else:
+                report.append(f"{metric:.<30} {value}")
+    
+    # Fusion Effectiveness Metrics
+    fusion_metrics = {k: v for k, v in metrics_dict.items() if 'fusion' in k or 'improvement' in k}
+    
+    if fusion_metrics:
+        report.append("\n🔄 HYBRID FUSION METRICS") 
+        report.append("-" * 40)
+        for metric, value in sorted(fusion_metrics.items()):
+            if isinstance(value, float):
+                report.append(f"{metric:.<30} {value:.4f}")
+            else:
+                report.append(f"{metric:.<30} {value}")
+    
+    report.append("\n" + "=" * 60)
+    
+    return "\n".join(report)
+
+# Update the example usage section
+if __name__ == '__main__':
+    # Extended example usage with comprehensive metrics
+    print("Testing Comprehensive Metrics System...")
+    
+    # Example data
+    retrieved_ids = ["docA", "docB", "docC", "docD", "docE", "docF", "docG"]
+    relevant_set = {"docA", "docC", "docE", "docH", "docI"}
+    relevance_scores = {
+        "docA": 3.0, "docB": 1.0, "docC": 2.0, "docD": 0.0, "docE": 3.0,
+        "docF": 0.0, "docG": 1.0, "docH": 3.0, "docI": 2.0, "docJ": 0.0
+    }
+    
+    # Initialize comprehensive metrics calculator
+    comp_metrics = ComprehensiveMetrics()
+    
+    # Calculate IR metrics
+    ir_results = comp_metrics.calculate_all_ir_metrics(
+        retrieved_ids, relevant_set, relevance_scores, [5, 10, 20]
+    )
+    
+    # Example embedding metrics (random data for demo)
+    query_embs = [np.random.randn(384) for _ in range(5)]
+    doc_embs = [np.random.randn(384) for _ in range(5)] 
+    labels = [1, 0, 1, 0, 1]
+    
+    embedding_results = comp_metrics.calculate_embedding_metrics(query_embs, doc_embs, labels)
+    
+    # Combine all results
+    all_metrics = {**ir_results, **embedding_results}
+    
+    # Generate and print report
+    report = generate_metrics_report(all_metrics)
+    print(report)
