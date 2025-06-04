@@ -1,8 +1,12 @@
-# Python
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
+
+# C extensions
 *.so
+
+# Distribution / packaging
 .Python
 build/
 develop-eggs/
@@ -45,7 +49,60 @@ coverage.xml
 .pytest_cache/
 cover/
 
-# Virtual environments
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+.pybuilder/
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# poetry
+poetry.lock
+
+# pdm
+.pdm.toml
+
+# PEP 582
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
 .env
 .venv
 env/
@@ -54,130 +111,59 @@ ENV/
 env.bak/
 venv.bak/
 
-# IDEs
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pytype static type analyzer
+.pytype/
+
+# Cython debug symbols
+cython_debug/
+
+# Research Assistant specific
+data/
+data_hybrid/
+data_store/
+logs/
+nltk_data/
+*.pkl
+*.npy
+*.log
+evaluation_results_*.json
+*_results.json
+*_analysis.log
+development/
+archive/
+finetune/
+frontend/
+my_mcp_server/
+
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
-*~
 
-# OS specific
+# OS
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
 Thumbs.db
-.qodo
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# Large data files and datasets
-data/
-data_hybrid/
-output_data/
-arxiv_dataset/
-finetune/dataset/
-*.jsonl
-*.json
-*.csv
-*.parquet
-*.h5
-*.hdf5
-*.pickle
-*.pkl
-
-# Model files
-*.bin
-*.safetensors
-*.ckpt
-*.pth
-*.pt
-*.tar
-*.tar.gz
-*.zip
-
-# Logs
-logs/
-logs_*/
-*.log
-*.out
 
 # Temporary files
-tmp/
-temp/
 *.tmp
 *.temp
-hold.txt
-
-# Documentation builds
-docs/_build/
-site/
-
-# Configuration files with secrets
-config.ini
-settings.json
-credentials.json
-.env.*
-
-# Large media files
-*.mp4
-*.avi
-*.mkv
-*.mov
-*.wmv
-*.flv
-*.webm
-*.mp3
-*.wav
-*.flac
-*.aac
-*.ogg
-*.wma
-*.pdf
-*.doc
-*.docx
-*.xls
-*.xlsx
-*.ppt
-*.pptx
-
-# Archive files
-*.rar
-*.7z
-*.gz
-*.bz2
-*.xz
-
-# Database files
-*.db
-*.sqlite
-*.sqlite3
-
-# Cache directories
-.cache/
-cache/
-
-# Node.js (if any frontend components)
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.npm
-.eslintcache
-
-# Additional exclusions for this project
-finetune/logs/
-logs_arxiv_collection/
-scripts/output_data_*/
-scripts/logs_*/
-
-# Temporary test files and logs
-test_*.py
-final_*.py
-*verification*.py
-app.log
-*.log.txt
-logs-*.txt
+*~

@@ -15,6 +15,7 @@ import string
 import sys
 
 from ..embedding_services.gemini_embedder import EmbeddingModel as GeminiEmbedder
+from ..query_processor import QueryProcessor
 
 
 @dataclass
@@ -166,10 +167,26 @@ class NltkManager:
 class HybridRecommender:
     """Orchestrates hybrid search using embeddings and BM25, fused with RRF."""
 
-    def __init__(self, embed_model: GeminiEmbedder):
-        """Initializes with a pre-configured EmbeddingModel instance."""
+    def __init__(self, embed_model: GeminiEmbedder, enable_query_preprocessing: bool = True):
+        """
+        Initializes with a pre-configured EmbeddingModel instance.
+        
+        Args:
+            embed_model: Pre-configured EmbeddingModel instance
+            enable_query_preprocessing: Whether to enable query preprocessing and expansion
+        """
         self.embed_model = embed_model
         self.nltk_manager = NltkManager() 
+        self.enable_query_preprocessing = enable_query_preprocessing
+        
+        # Initialize QueryProcessor if preprocessing is enabled
+        if self.enable_query_preprocessing:
+            self.query_processor = QueryProcessor(use_nltk_expansion=True)
+            logger.info("HybridRecommender initialized with query preprocessing enabled.")
+        else:
+            self.query_processor = None
+            logger.info("HybridRecommender initialized with query preprocessing disabled.")
+            
         logger.info(f"HybridRecommender initialized with embedding model: {type(embed_model).__name__}")
 
     def _validate_embeddings(self, query_embedding: Optional[np.ndarray], resource_embeddings: Optional[np.ndarray]) -> bool:
@@ -323,10 +340,23 @@ class HybridRecommender:
         logger.info(f"Starting recommendation for query: '{query[:100]}...'")
         logger.debug(f"Recommendation params: {params}")
 
+        # Preprocess the query if query preprocessing is enabled
+        processed_query = query
+        if self.enable_query_preprocessing and self.query_processor:
+            try:
+                processed_query = self.query_processor.preprocess_query(query, expand_synonyms=True)
+                logger.info(f"Query preprocessing: '{query}' -> '{processed_query}'")
+            except Exception as e:
+                logger.error(f"Query preprocessing failed: {e}. Using original query.", exc_info=True)
+                processed_query = query
+        else:
+            logger.debug("Query preprocessing disabled or not available. Using original query.")
+
         query_embedding: Optional[np.ndarray] = None
         if self.embed_model and resource_embeddings is not None:
             try:
-                query_embedding = self.embed_model.encode(query, task_type="RETRIEVAL_QUERY")
+                # Use processed query for semantic search
+                query_embedding = self.embed_model.encode(processed_query, task_type="RETRIEVAL_QUERY")
                 logger.debug(f"Query embedding generated with shape: {query_embedding.shape if query_embedding is not None else 'None'}")
             except Exception as e:
                 logger.error(f"Failed to generate query embedding: {e}", exc_info=True)
@@ -345,10 +375,10 @@ class HybridRecommender:
         else:
             logger.debug("Skipping semantic search due to missing query embedding or resource embeddings.")
 
-        # Perform keyword search
+        # Perform keyword search using processed query
         keyword_results: List[Tuple[int, float]] = []
         if bm25_index is not None: # bm25_index can be None
-            keyword_results = self._keyword_search(query, bm25_index, num_docs_in_corpus, params.keyword_candidates)
+            keyword_results = self._keyword_search(processed_query, bm25_index, num_docs_in_corpus, params.keyword_candidates)
             logger.debug(f"Keyword search returned {len(keyword_results)} results.")
         else:
             logger.debug("Skipping keyword search due to missing BM25 index.")

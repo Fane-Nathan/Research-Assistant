@@ -1,0 +1,27 @@
+{
+  "name": "Python 3 (Slim Bookworm)",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12-bookworm",
+  "customizations": {
+    "vscode": {
+      "settings": {},
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance"
+      ]
+    }
+  },
+  "updateContentCommand": "[ -f packages.txt ] && sudo apt-get update && sudo apt-get upgrade -y && sudo xargs -r apt-get install -y <packages.txt || echo 'No packages.txt or packages failed to install.'; pip3 install --user --upgrade pip setuptools wheel; [ -f requirements.txt ] && pip3 install --user -r requirements.txt; pip3 install --user streamlit; echo '✅ Packages installed and Requirements met'",
+  "postAttachCommand": {
+    "server": "streamlit run app.py --server.enableCORS false --server.enableXsrfProtection false"
+  },
+  "portsAttributes": {
+    "8501": {
+      "label": "Application",
+      "onAutoForward": "openPreview"
+    }
+  },
+  "forwardPorts": [
+    8501
+  ],
+  "remoteUser": "vscode" // Or the default user for this image
+}

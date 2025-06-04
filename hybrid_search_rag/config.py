@@ -10,13 +10,13 @@ and across different providers (e.g., Google -> Groq).
 
 import os
 import logging
-import sys # Import sys for stderr printing
-from typing import List, Optional, Final # Added Final for constants
+import sys
+from typing import List, Optional, Final
 
 # --- Basic Logging Setup (Configure early) ---
 logging.basicConfig(
     level=logging.DEBUG,
-    format='%(asctime)s - %(levelname)-8s - [%(name)s - %(funcName)s:%(lineno)d] - %(message)s', # Added more details to format
+    format='%(asctime)s - %(levelname)-8s - [%(name)s - %(funcName)s:%(lineno)d] - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S',
     force=True # force=True can be useful if other libs try to configure logging, but use with awareness
 )
@@ -29,11 +29,11 @@ try:
     logger.info(f"Project root determined: {_project_root_value}")
 except Exception as e:
     logger.error(f"Failed to determine project root: {e}", exc_info=True)
-    _project_root_value = os.getcwd() # Fallback
+    _project_root_value = os.getcwd() 
     logger.warning(f"Falling back to current working directory as project root: {_project_root_value}")
 
 PROJECT_ROOT: Final[str] = _project_root_value
-logger.info(f"PROJECT_ROOT set to: {PROJECT_ROOT}") # Added log for PROJECT_ROOT
+logger.info(f"PROJECT_ROOT set to: {PROJECT_ROOT}")
 
 # --- Environment Variable Loading (.env) ---
 DOTENV_PATH: Final[str] = os.path.join(PROJECT_ROOT, '.env')
@@ -56,14 +56,13 @@ except Exception as e:
 # --- Data Storage Configuration ---
 # Defines where data like metadata, embeddings, and BM25 indexes are stored.
 # DATA_DIR: Final[str] = os.path.join(PROJECT_ROOT, "data_store", "corpus_data") # Original
-DATA_DIR: Final[str] = os.path.join(PROJECT_ROOT, "data_hybrid") # Changed to data_hybrid
-logger.info(f"DATA_DIR set to: {DATA_DIR}") # Added log for DATA_DIR
+DATA_DIR: Final[str] = os.path.join(PROJECT_ROOT, "data_hybrid")
+logger.info(f"DATA_DIR set to: {DATA_DIR}")
 
 METADATA_FILE: Final[str] = "combined_metadata.json"
 EMBEDDINGS_FILE: Final[str] = "combined_embeddings.npy"
 BM25_INDEX_FILE: Final[str] = "bm25_index.pkl"
 
-# Log the full paths for clarity
 _full_metadata_path = os.path.join(DATA_DIR, METADATA_FILE)
 _full_embeddings_path = os.path.join(DATA_DIR, EMBEDDINGS_FILE)
 _full_bm25_path = os.path.join(DATA_DIR, BM25_INDEX_FILE)
@@ -78,8 +77,7 @@ logger.info(f"Expected BM25 index file path: {_full_bm25_path}")
 # Load API keys from environment variables (set in .env file).
 GOOGLE_API_KEY: Final[Optional[str]] = os.getenv("GOOGLE_API_KEY")
 GROQ_API_KEY: Final[Optional[str]] = os.getenv("GROQ_API_KEY")
-DEEPSEEK_API_KEY: Final[Optional[str]] = os.getenv("DEEPSEEK_API_KEY") # Added DeepSeek API Key
-# Add other keys if needed (e.g., HF_API_TOKEN)
+DEEPSEEK_API_KEY: Final[Optional[str]] = os.getenv("DEEPSEEK_API_KEY")
 
 
 # ==============================================================================
@@ -87,7 +85,7 @@ DEEPSEEK_API_KEY: Final[Optional[str]] = os.getenv("DEEPSEEK_API_KEY") # Added D
 # ==============================================================================
 # --- Provider Order ---
 # Define the order in which to try providers. The first provider is primary.
-LLM_PROVIDER_ORDER: Final[List[str]] = ["google", "groq", "deepseek"] # Example: Try Google first, then Groq, then DeepSeek
+LLM_PROVIDER_ORDER: Final[List[str]] = ["google", "groq", "deepseek"] 
 
 # --- Models per Provider ---
 # Define lists of model IDs to try *within* each provider, in order of preference.
@@ -165,7 +163,7 @@ MAX_LLM_RETRIES_CONFIG: Final[int] = 2
 RETRY_ON_EMPTY_LLM_RESPONSE_CONFIG: Final[bool] = False
 RETRY_DELAY_SECONDS_SHORT_CONFIG: Final[int] = 5
 LONG_RETRY_DELAY_SECONDS_FOR_RATE_LIMIT_CONFIG: Final[int] = 65
-LLM_TEMPERATURE_EVAL_CONFIG: Final[float] = 0.1 # Temperature specifically for evaluation LLM calls
+LLM_TEMPERATURE_EVAL_CONFIG: Final[float] = 0.1
 
 # ==============================================================================
 # --- arXiv Data Collection Script Settings (arxiv_parallel_dataset_retrieval.py) ---
@@ -309,7 +307,6 @@ def run_config_checks():
          logger.info(f"Configuration checks passed (at least one provider seems usable).")
     else:
          logger.critical("One or more critical configuration checks failed. Functionality will be impaired. Please review errors/warnings and check your .env file and provider model lists.")
-         # Print a prominent message if critical config is missing
          print("\n" + "="*60 + "\n"
                "🚨 CRITICAL CONFIGURATION ERROR 🚨\n"
                "   No LLM provider seems fully configured with both models and an API key,\n"
@@ -320,7 +317,6 @@ def run_config_checks():
                "   The application may not function correctly.\n"
                + "="*60 + "\n", file=sys.stderr)
 
-# Run checks when the module is imported
 run_config_checks()
 
 logger.info("Configuration loading complete.")

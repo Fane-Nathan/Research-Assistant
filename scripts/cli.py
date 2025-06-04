@@ -9,9 +9,9 @@ import argparse
 import logging
 import ssl
 import os
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # Suppress TensorFlow INFO messages
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import sys
-import arxiv # type: ignore
+import arxiv
 import nltk
 import numpy as np
 from typing import Optional, Tuple, List, Dict, Any, Union, Generator, cast 
@@ -30,39 +30,31 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(script_dir)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
-# --- End Path Setup ---
 
 
 # --- Project Module Imports ---
 try:
     from hybrid_search_rag import config
-    # Ensure resource_fetcher is imported correctly
     from hybrid_search_rag.data_handling.resource_fetcher import (
         fetch_arxiv_papers,
         crawl_and_fetch_web_articles,
-        PLAYWRIGHT_AVAILABLE, # Import for checking
-        ResourceFetcher # Added ResourceFetcher
+        PLAYWRIGHT_AVAILABLE,
+        ResourceFetcher
     )
     from hybrid_search_rag.embedding_services.gemini_embedder import EmbeddingModel
     from hybrid_search_rag.data_handling.data_manager import DataManager
     from hybrid_search_rag.retrieval_algorithm.hybrid_recommender import HybridRecommender, NltkManager, RecommendationParams
-    from rank_bm25 import BM25Okapi # type: ignore
-    # Import the updated llm_interface
+    from rank_bm25 import BM25Okapi
     from hybrid_search_rag.llm_services.llm_interface import get_llm_response, get_llm_response_stream
-    # Import the text cleaner for fixing garbled text in academic papers
     from hybrid_search_rag.text_processing.text_cleaner import clean_context_list, clean_academic_title
 except ImportError as e:
-    # Use print for critical import errors as logger might not be fully configured yet
     print(f"ERROR: Failed to import project modules in cli.py: {e}", file=sys.stderr)
     print(f"Ensure you are running from the project root or the path setup is correct.", file=sys.stderr)
     print(f"Current sys.path: {sys.path}", file=sys.stderr)
     sys.exit(1)
-# --- End Project Module Imports ---
 
 
 # --- NLTK Data Check ---
-# Flag to ensure check/download runs only once per script execution if successful.
-# If it fails, it might be re-attempted.
 _nltk_data_checked_cli_status: Optional[bool] = None
 
 
@@ -92,7 +84,6 @@ def check_nltk_data() -> bool:
         logger.info(f"Current nltk.data.path: {nltk.data.path}")
     except Exception as e_path:
         logger.error(f"Failed to setup NLTK data directory {nltk_data_dir}: {e_path}", exc_info=True)
-        # If path setup fails, it's risky to proceed with downloads to unknown locations.
         _nltk_data_checked_cli_status = False
         return False
     # --- End NLTK Data Path Setup ---
@@ -112,7 +103,7 @@ def check_nltk_data() -> bool:
                 logger.info(f"NLTK package '{package_name}' successfully tested with sent_tokenize.")
                 package_verified = True
             elif package_name == "stopwords":
-                nltk.data.find("corpora/stopwords/english") # Check for English stopwords list
+                nltk.data.find("corpora/stopwords/english")
                 logger.info(f"NLTK package '{package_name}' (english stopwords) found.")
                 # Optionally, load them: from nltk.corpus import stopwords; stopwords.words('english')
                 package_verified = True
@@ -131,10 +122,9 @@ def check_nltk_data() -> bool:
                 # Always try the original package too
                 nltk.download(package_name, download_dir=nltk_data_dir, quiet=True)
                 logger.info(f"NLTK package '{package_name}' downloaded to {nltk_data_dir}.")
-                # Re-verify after download
                 if package_name == "punkt":
-                    nltk.data.find("tokenizers/punkt/PY3/english.pickle") # Re-check pickle
-                    nltk.sent_tokenize("This is a test sentence after download. For NLTK punkt.") # Re-test tokenize
+                    nltk.data.find("tokenizers/punkt/PY3/english.pickle")
+                    nltk.sent_tokenize("This is a test sentence after download. For NLTK punkt.")
                     logger.info(f"NLTK package '{package_name}' successfully re-tested after download.")
                 elif package_name == "stopwords":
                     nltk.data.find("corpora/stopwords/english")
@@ -143,20 +133,20 @@ def check_nltk_data() -> bool:
             except Exception as e:
                 logger.error(f"Failed to download or verify NLTK package '{package_name}' after download attempt: {e}", exc_info=True)
                 all_packages_ok = False
-        except Exception as e_test: # Catch other errors from tests (e.g., sent_tokenize)
+        except Exception as e_test:
             logger.error(f"NLTK package '{package_name}' test failed: {e_test}", exc_info=True)
             all_packages_ok = False
-        
-        if not package_verified and all_packages_ok: # If a package wasn't verified but no error set all_packages_ok to False
+
+        if not package_verified and all_packages_ok:
             all_packages_ok = False
 
 
     if not all_packages_ok:
         logger.critical("One or more NLTK data packages are missing or failed verification. Chunking and other NLP tasks may fail.")
-        _nltk_data_checked_cli_status = False # Mark as failed
+        _nltk_data_checked_cli_status = False
     else:
         logger.info("All required NLTK data packages verified and tested successfully (CLI version).")
-        _nltk_data_checked_cli_status = True # Mark as successful
+        _nltk_data_checked_cli_status = True
 
     return _nltk_data_checked_cli_status
 
@@ -166,17 +156,15 @@ def chunk_text_by_sentences(text: str, sentences_per_chunk: int = 5, overlap_sen
     """Splits text into chunks by sentences with overlap."""
     if not text: return []
     try:
-        # Ensure punkt is available before tokenizing
-        nltk.data.find('tokenizers/punkt') # This will raise LookupError if check_nltk_data failed
+        nltk.data.find('tokenizers/punkt') 
         sentences = nltk.sent_tokenize(text)
     except LookupError:
         logger.critical("NLTK 'punkt' tokenizer not found during chunking. Cannot proceed. Ensure NLTK data was downloaded.")
-        # Re-raise or return empty list depending on desired handling
-        raise # Let the calling function handle the critical error
+        raise
     except Exception as e:
         logger.warning(f"Sentence tokenization failed with unexpected error: {e}. Falling back to newline split.")
-        sentences = [p.strip() for p in text.split('\n') if p.strip()] # Corrected split character
-        if not sentences: sentences = [p.strip() for p in text.split('.') if p.strip()] # Further fallback
+        sentences = [p.strip() for p in text.split('\n') if p.strip()]
+        if not sentences: sentences = [p.strip() for p in text.split('.') if p.strip()] 
 
     if not sentences:
         logger.warning("Could not extract sentences or lines for chunking.")
@@ -200,15 +188,14 @@ loaded_bm25_index: Optional[BM25Okapi] = None
 loaded_recommender: Optional[HybridRecommender] = None
 
 # --- Component Loading ---
-def load_components(force_reload: bool = False) -> Dict[str, Any]: # Made sync - no async operations needed
+def load_components(force_reload: bool = False) -> Dict[str, Any]: 
     global loaded_metadata, loaded_embeddings, loaded_bm25_index, loaded_recommender
-    # Initialize a dictionary to hold the components
     components_to_return: Dict[str, Any] = {
         "data_manager": None,
         "recommender": None,
-        "llm_interface": None, # Assuming llm_interface is also a component to be returned
-        "status_message": "Initialization pending.", # Added status message
-        "nltk_manager": None # Added NltkManager
+        "llm_interface": None, 
+        "status_message": "Initialization pending.",
+        "nltk_manager": None
     }
 
     if force_reload or loaded_metadata is None or loaded_recommender is None:
@@ -218,7 +205,6 @@ def load_components(force_reload: bool = False) -> Dict[str, Any]: # Made sync -
         data_manager = DataManager(config.DATA_DIR, config.METADATA_FILE, config.EMBEDDINGS_FILE, config.BM25_INDEX_FILE)
         components_to_return["data_manager"] = data_manager
 
-        # Load data and cast bm25_index to its expected type
         logger.info(f"Attempting to load data from DataManager. DATA_DIR: {config.DATA_DIR}, METADATA_FILE: {config.METADATA_FILE}")
         meta_temp, embeddings_temp, bm25_index_object = data_manager.load_all_data()
         loaded_metadata = meta_temp
@@ -235,9 +221,8 @@ def load_components(force_reload: bool = False) -> Dict[str, Any]: # Made sync -
             components_to_return["status_message"] = f"Loaded {len(loaded_metadata)} metadata items."
 
         try:
-            # Ensure NLTK data needed by Recommender/NltkManager is checked/loaded
             logger.info("Checking NLTK data for component loading...")
-            if not check_nltk_data(): # Now returns bool
+            if not check_nltk_data():
                 error_msg = "NLTK data check/download failed. Recommender cannot be initialized."
                 logger.critical(error_msg)
                 components_to_return["status_message"] = error_msg
@@ -245,16 +230,14 @@ def load_components(force_reload: bool = False) -> Dict[str, Any]: # Made sync -
             logger.info("NLTK data check successful.")
             components_to_return["status_message"] += " NLTK data OK."
 
-            # Initialize NltkManager first
             nltk_manager = NltkManager()
             components_to_return["nltk_manager"] = nltk_manager
             logger.info("NltkManager initialized.")
 
             embedder = EmbeddingModel(config.EMBEDDING_MODEL_NAME)
-            # HybridRecommender initializes its own NltkManager
-            loaded_recommender = HybridRecommender(embed_model=embedder)
+            loaded_recommender = HybridRecommender(embed_model=embedder, enable_query_preprocessing=True)
             components_to_return["recommender"] = loaded_recommender
-            logger.info("Recommender initialized.")
+            logger.info("Recommender initialized with query preprocessing enabled.")
             components_to_return["status_message"] += " Recommender initialized."
             
             # Placeholder for LLM Interface if it needs to be part of loaded components
@@ -278,9 +261,7 @@ def load_components(force_reload: bool = False) -> Dict[str, Any]: # Made sync -
 
         except SystemExit: # Catch exit from check_nltk_data
              logger.critical("NLTK data check failed during component loading. Cannot initialize recommender.")
-             # Return partially filled components
              return components_to_return
-             # raise RuntimeError("Failed to acquire NLTK data during component loading.") # Original behavior
         except Exception as e:
             logger.error(f"Recommender initialization failed: {e}", exc_info=True)
             loaded_recommender = None
@@ -297,16 +278,15 @@ def load_components(force_reload: bool = False) -> Dict[str, Any]: # Made sync -
         if loaded_embeddings is None and loaded_bm25_index is None and loaded_metadata is not None:
             warning_msg = "Both embeddings and BM25 index are missing. Search functionality severely limited."
             logger.error(warning_msg)
-            # If metadata IS present, this is a partial load, not a complete failure to find data.
             components_to_return["status_message"] += f" {warning_msg}"
-        elif loaded_metadata is None: # This case should be caught earlier by the metadata check
+        elif loaded_metadata is None:
             components_to_return["status_message"] = "Critical: Metadata is missing. All components failed to load."
 
     else:
         logger.info("Core components already loaded, returning existing instances.")
         components_to_return["data_manager"] = DataManager(config.DATA_DIR, config.METADATA_FILE, config.EMBEDDINGS_FILE, config.BM25_INDEX_FILE)
         components_to_return["recommender"] = loaded_recommender
-        components_to_return["nltk_manager"] = NltkManager() # Assuming NltkManager is stateless or re-init is fine
+        components_to_return["nltk_manager"] = NltkManager() 
         try:
             from hybrid_search_rag.llm_services import llm_interface
             components_to_return["llm_interface"] = llm_interface
@@ -316,7 +296,6 @@ def load_components(force_reload: bool = False) -> Dict[str, Any]: # Made sync -
             components_to_return["llm_interface"] = None
             components_to_return["status_message"] = "Components loaded, but LLM interface import failed."
 
-    # Final check on recommender status for the message
     if components_to_return.get("recommender") is None and "Recommender init failed" not in components_to_return.get("status_message", "") and "Metadata loading failed" not in components_to_return.get("status_message", "") :
         components_to_return["status_message"] = components_to_return.get("status_message", "") + " Recommender is None (check logs)."
     elif components_to_return.get("recommender") is not None and "Recommender initialized" not in components_to_return.get("status_message", "") and "Components already loaded" not in components_to_return.get("status_message", ""):
@@ -333,16 +312,13 @@ async def setup_data_and_fetch(args: argparse.Namespace) -> str:
 
     # --- Ensure NLTK data is available before proceeding ---
     try:
-        # Call the more robust check_nltk_data
         if not check_nltk_data():
-            # This message will be returned to the UI if fetch is triggered from there
             return "Error: Critical NLTK data (e.g., 'punkt' for sentence tokenization) is missing or failed verification. Cannot proceed with data fetching. Please check logs."
-    except Exception as e: # Catch any unexpected error from check_nltk_data
+    except Exception as e:
         logger.critical(f"An unexpected error occurred during NLTK data check: {e}", exc_info=True)
         return f"Error: Unexpected issue during NLTK data check: {e}. Cannot proceed."
     # ---
 
-    # Determine Sources
     arxiv_query = ""; target_urls: List[str] = []; max_results = args.num_arxiv
     try:
         if args.suggest_sources:
@@ -354,7 +330,6 @@ async def setup_data_and_fetch(args: argparse.Namespace) -> str:
 Provide *only* the queries and URLs in the specified format.'''
             logger.info("Requesting source suggestions from LLM...")
             try:
-                # Use the non-streaming interface for suggestions
                 suggestion_response = get_llm_response(suggestion_prompt)
                 if suggestion_response:
                     suggested_arxiv_queries = [line.replace("ARXIV_QUERY:", "").strip() for line in suggestion_response.splitlines() if line.strip().startswith("ARXIV_QUERY:")]
@@ -374,7 +349,7 @@ Provide *only* the queries and URLs in the specified format.'''
                  status_messages.append(f"Warning: LLM suggestion failed ({llm_e}).")
         elif args.arxiv_query:
             arxiv_query = args.arxiv_query
-            target_urls = config.TARGET_WEB_URLS if hasattr(config, 'TARGET_WEB_URLS') else [] # Use config or empty list
+            target_urls = config.TARGET_WEB_URLS if hasattr(config, 'TARGET_WEB_URLS') else []
             logger.info(f"Using custom arXiv query: '{arxiv_query}' and {'default' if target_urls else 'no'} web URLs.")
         else:
             arxiv_query = config.DEFAULT_ARXIV_QUERY if hasattr(config, 'DEFAULT_ARXIV_QUERY') else ""
@@ -388,13 +363,13 @@ Provide *only* the queries and URLs in the specified format.'''
     logger.info(f"Fetching: arXiv query='{arxiv_query}' (max={max_results}), URLs={len(target_urls)}")
     
     arxiv_metadata_list: List[Dict[str, Any]] = []
-    web_metadata_list: List[Dict[str, Any]] = [] # Initialize web_metadata_list
-    resource_fetcher_instance = None  # Initialize instance
+    web_metadata_list: List[Dict[str, Any]] = []
+    resource_fetcher_instance = None 
 
     try:
         # Initialize ResourceFetcher
-        use_playwright_pdf = getattr(args, 'use_playwright_for_pdfs', True) # Default to True
-        fetch_timeout = getattr(args, 'fetch_timeout_seconds', 30) # Default to 30 seconds
+        use_playwright_pdf = getattr(args, 'use_playwright_for_pdfs', True)
+        fetch_timeout = getattr(args, 'fetch_timeout_seconds', 30)
 
         fetcher = ResourceFetcher(
             timeout=fetch_timeout,
@@ -414,34 +389,32 @@ Provide *only* the queries and URLs in the specified format.'''
                 arxiv_metadata_list_with_potential_pdfs = await fetch_arxiv_papers(
                     query=arxiv_query,
                     max_results=max_results,
-                    verbose=getattr(args, 'debug', False) # Pass debug flag for verbose logging
+                    verbose=getattr(args, 'debug', False)
                 )
+                
                 processed_arxiv_docs = []
+                
                 for paper_meta in arxiv_metadata_list_with_potential_pdfs:
                     if paper_meta.get('pdf_url'):
                         logger.info(f"Attempting to fetch PDF content for: {paper_meta.get('title')} from {paper_meta.get('pdf_url')}")
-                        # Use ResourceFetcher.fetch_document for PDF
-                        # fetch_document is async, so await it.
-                        # It handles the sync playwright call in a thread.
                         fetched_doc_data = await fetcher.fetch_document(
                             url=paper_meta['pdf_url'], 
                             source='arxiv', 
                             is_arxiv_pdf_link=True
                         )
+                        
                         if fetched_doc_data and fetched_doc_data.get('text'):
-                            # Update the original metadata with the fetched text content
                             paper_meta['content'] = fetched_doc_data['text']
-                            paper_meta['content_type'] = 'pdf' # Mark as PDF content
+                            paper_meta['content_type'] = 'pdf'
                             processed_arxiv_docs.append(paper_meta)
                             logger.info(f"Successfully fetched and processed PDF for: {paper_meta.get('title')}")
                         else:
                             logger.warning(f"Failed to fetch/process PDF for: {paper_meta.get('title')} from {paper_meta.get('pdf_url')}")
-                            # Optionally, still add metadata even if PDF fetch failed, but without content
-                            paper_meta['content'] = None # Ensure content is None
+                            paper_meta['content'] = None 
                             processed_arxiv_docs.append(paper_meta)
                     else:
                         logger.warning(f"No PDF URL for arXiv entry: {paper_meta.get('title')}. Skipping PDF fetch.")
-                        paper_meta['content'] = None # Ensure content is None
+                        paper_meta['content'] = None
                         processed_arxiv_docs.append(paper_meta)
                 arxiv_metadata_list = processed_arxiv_docs
 
@@ -471,9 +444,9 @@ Provide *only* the queries and URLs in the specified format.'''
         else:
             web_metadata_list = []
 
-    finally: # Ensure resource cleanup
+    finally:
         if resource_fetcher_instance:
-            resource_fetcher_instance.close() # Close Playwright resources
+            resource_fetcher_instance.close()
         logger.info("Completed data fetching process.")
 
     original_documents = arxiv_metadata_list + web_metadata_list
@@ -485,18 +458,12 @@ Provide *only* the queries and URLs in the specified format.'''
         
     logger.info(f"Fetched {num_docs_fetched} total documents.")
 
-    # Chunking Documents
     logger.info("Chunking documents...")
     all_chunk_metadata = []
     for doc_index, doc_meta in enumerate(original_documents):
-        original_content = doc_meta.get('content', '') # content should now have PDF text
-        original_url = doc_meta.get('url', f'doc_{doc_index}') # Use 'url' which is consistent
-        
-        # Ensure 'title' exists, provide a fallback
+        original_content = doc_meta.get('content', '')
+        original_url = doc_meta.get('url', f'doc_{doc_index}')
         original_title = doc_meta.get('title', 'Untitled Document')
-        if not original_title or not isinstance(original_title, str):
-            original_title = 'Untitled Document'
-
 
         if not original_content or not isinstance(original_content, str) or not original_content.strip():
             logger.warning(f"Document '{original_title}' (URL: {original_url}) has no content or invalid content type. Skipping chunking for this document.")
@@ -512,19 +479,16 @@ Provide *only* the queries and URLs in the specified format.'''
             continue
 
         for chunk_index, chunk_text in enumerate(text_chunks):
-            # Use 'entry_id' for arXiv, 'url' for web as the primary ID for the chunk
-            # This ensures consistency with how recommender might expect IDs
             doc_id_for_chunk = doc_meta.get('entry_id') if doc_meta.get('source') == 'arxiv' else original_url
 
             all_chunk_metadata.append({
                 "chunk_id": f"{doc_id_for_chunk}_chunk_{chunk_index}",
                 "chunk_text": chunk_text,
-                "original_url": original_url, # Keep the actual URL
+                "original_url": original_url, 
                 "original_title": original_title,
                 "source": doc_meta.get('source', 'unknown'),
                 "authors": doc_meta.get('authors', []),
                 "published": doc_meta.get('published', None),
-                # 'entry_id' will be the main ID for the chunk, derived from arXiv ID or URL
                 "entry_id": f"{doc_id_for_chunk}_chunk_{chunk_index}"
             })
     num_chunks = len(all_chunk_metadata)
@@ -549,9 +513,8 @@ Provide *only* the queries and URLs in the specified format.'''
         status_messages.append("Warning: Embedding failed.")
 
     try: # BM25 Indexing
-        # NltkManager should be ready now due to earlier check
         tokenized_corpus = [NltkManager.tokenize_text(t) for t in all_chunk_texts if isinstance(t, str) and t.strip()]
-        tokenized_corpus = [tok for tok in tokenized_corpus if tok] # Remove empty lists after tokenization
+        tokenized_corpus = [tok for tok in tokenized_corpus if tok]
         if tokenized_corpus:
             bm25_index = BM25Okapi(tokenized_corpus)
             logger.info("BM25 index built.")
@@ -568,7 +531,7 @@ Provide *only* the queries and URLs in the specified format.'''
     try: # Saving Data
         manager.save_all_data(all_chunk_metadata, embeddings, bm25_index)
         logger.info("Processed data saved successfully.")
-        load_components(force_reload=True) # Reload components with new data
+        load_components(force_reload=True)
         success_msg = f"Success: Fetched {num_docs_fetched} docs, generated {num_chunks} chunks. Saved metadata"
         if embed_success: success_msg += ", embeddings"
         if bm25_success: success_msg += ", BM25 index"
@@ -591,7 +554,7 @@ def format_fallback_results(results: List[Tuple[Dict[str, Any], float]], num_to_
         lines.append(f"   Title: {chunk_meta.get('original_title', 'N/A')}")
         lines.append(f"   URL: {chunk_meta.get('original_url', '#')}")
         lines.append(f"   Snippet: {(chunk_meta.get('chunk_text', '') or '')[:200]}...")
-    return "\n".join(lines) # Changed to join with newline
+    return "\n".join(lines) 
 
 # --- Recommendation Logic ---
 async def run_recommendation(query: str, num_final_results: int, general_mode: bool, concise_mode: bool) -> Tuple[Generator[str, None, None], List[str], List[Dict[str, Any]]]:
@@ -606,7 +569,7 @@ async def run_recommendation(query: str, num_final_results: int, general_mode: b
     response_generator: Generator[str, None, None]
     formatted_source_list: List[str] = []
     raw_context_chunks_list: List[Dict[str, Any]] = []
-    hybrid_results: List[Tuple[Dict[str, Any], float]] = [] # Corrected type hint
+    hybrid_results: List[Tuple[Dict[str, Any], float]] = []
     captured_exception = None
 
     try:
@@ -614,23 +577,19 @@ async def run_recommendation(query: str, num_final_results: int, general_mode: b
              logger.info("Components not loaded, attempting load...")
              load_components()
         
-        # Check if we need to proceed with general knowledge only (empty knowledge base)
         kb_is_empty = loaded_metadata is None or len(loaded_metadata) == 0
         
         if kb_is_empty:
-            # Don't raise an error for empty knowledge base in general mode
             if general_mode:
                 logger.warning("Knowledge base is empty, proceeding with general knowledge only.")
             else:
-                # Only raise error if not in general mode
                 raise RuntimeError("Core components failed to load and general_mode is False. Run 'fetch' command first.")
 
-        # Check if knowledge base exists and has content
         kb_is_empty = loaded_metadata is None or len(loaded_metadata) == 0
         
         if kb_is_empty:
             logger.warning("Knowledge base is empty, skipping retrieval step.")
-            hybrid_results = []  # Empty results list since we can't perform retrieval
+            hybrid_results = []
         else:
             logger.info("Retrieving relevant document chunks...")
             num_candidates = max(config.RAG_NUM_DOCS + 5, num_final_results + 5)
@@ -643,7 +602,6 @@ async def run_recommendation(query: str, num_final_results: int, general_mode: b
                     fusion_k=config.RANK_FUSION_K,
                     top_n_final=num_candidates
                 )
-                # Ensure loaded_recommender is not None and loaded_metadata is not None before calling recommend
                 if loaded_recommender and loaded_metadata is not None:
                     hybrid_results = loaded_recommender.recommend(
                         query=query,
@@ -652,7 +610,7 @@ async def run_recommendation(query: str, num_final_results: int, general_mode: b
                         bm25_index=loaded_bm25_index,
                         params=rec_params
                     )
-                else: # Should be caught by earlier check, but as a safeguard
+                else: 
                     if general_mode:
                         logger.warning("Recommender or metadata is None but general_mode is True, proceeding without retrieval.")
                         hybrid_results = []
@@ -661,15 +619,14 @@ async def run_recommendation(query: str, num_final_results: int, general_mode: b
                 logger.info(f"Retrieved {len(hybrid_results)} candidate chunks.")
             else: logger.warning("Skipping retrieval (no metadata available or zero candidates needed).")
 
-        # Determine if we have an empty knowledge base scenario
         kb_is_empty = loaded_metadata is None or len(loaded_metadata) == 0
         
-        # Set a contextual message for empty knowledge base or no relevant chunks
         if kb_is_empty:
             context_string = "The knowledge base is empty. No document chunks are available for context."
             logger.info("Knowledge base is empty - proceeding with empty context.")
-        else:            context_string = "No relevant document chunks were found in the local data."
-        
+        else:
+            context_string = "No relevant document chunks were found in the local data."
+
         reference_map = {}
         if hybrid_results:
             top_chunks_for_rag = hybrid_results[:config.RAG_NUM_DOCS]
@@ -681,9 +638,8 @@ async def run_recommendation(query: str, num_final_results: int, general_mode: b
                  url = chunk_meta.get('original_url', '#')
                  chunk_text = chunk_meta.get('chunk_text', '')
                  snippet = (chunk_text or '')[:config.MAX_CONTEXT_LENGTH_PER_DOC]
-                   # Create a copy of the chunk metadata and add a 'content' key for the UI
                  chunk_meta_copy = chunk_meta.copy()
-                 chunk_meta_copy['content'] = chunk_text  # Add 'content' key that maps to 'chunk_text'                 # Add metadata for the UI
+                 chunk_meta_copy['content'] = chunk_text
                  if 'metadata' not in chunk_meta_copy:
                      chunk_meta_copy['metadata'] = {
                          'title': title,
@@ -695,10 +651,8 @@ async def run_recommendation(query: str, num_final_results: int, general_mode: b
                  context_texts.append(f"Source [{chunk_num}]:Title: {title} URL: {url} Content Snippet: {snippet}")
                  reference_map[chunk_num] = f"{title} (URL: {url})"
             
-            # Clean up the text in context chunks to fix garbled characters
             raw_context_chunks_list = clean_context_list(raw_context_chunks_list)
             
-            # Log context chunk structure for debugging
             if raw_context_chunks_list:
                 sample_keys = list(raw_context_chunks_list[0].keys())
                 logger.info(f"Context chunk structure - keys available: {sample_keys}")
@@ -709,7 +663,7 @@ async def run_recommendation(query: str, num_final_results: int, general_mode: b
                 if 'metadata' in sample_keys:
                     logger.info(f"'metadata' keys: {list(raw_context_chunks_list[0].get('metadata', {}).keys())}")
             
-            context_string = "\n---\n".join(context_texts) # Use newline and --- for separation
+            context_string = "\n---\n".join(context_texts)
             formatted_source_list = [f"[{num}] {details}" for num, details in reference_map.items()]
             logger.info(f"Prepared context from {len(raw_context_chunks_list)} chunks.")
         else:
@@ -807,10 +761,10 @@ def run_arxiv_search(query: str, num_results: int) -> List[Dict[str, Any]]:
             results_list.append({
                 "title": result.title or "N/A",
                 "authors": [str(a) for a in result.authors],
-                "published_date": result.published.strftime('%Y-%m-%d') if result.published else "N/A", # Changed key
-                "entry_id": result.entry_id or 'N/A', # Added entry_id
+                "published_date": result.published.strftime('%Y-%m-%d') if result.published else "N/A",
+                "entry_id": result.entry_id or 'N/A',
                 "pdf_url": result.pdf_url or 'N/A',
-                "url": result.entry_id or 'N/A', # Use entry_id as primary URL
+                "url": result.entry_id or 'N/A',
                 "summary": (result.summary or '').replace('\n', ' ').strip()
             })
         logger.info(f"arXiv search found {len(results_list)} results.")
@@ -825,10 +779,9 @@ def run_arxiv_search(query: str, num_results: int) -> List[Dict[str, Any]]:
 
 
 # --- Main CLI Execution ---
-async def main_cli(): # Renamed to avoid conflict with main function in app.py
+async def main_cli():
     parser = argparse.ArgumentParser(description='''CLI for Hybrid Search RAG.''')
     
-    # Subparsers for different commands
     subparsers = parser.add_subparsers(dest="command", help="Available commands", required=True)
 
     # --- Fetch Command ---
@@ -846,7 +799,6 @@ async def main_cli(): # Renamed to avoid conflict with main function in app.py
     rec_parser.add_argument("-n", "--num-results", type=int, default=config.RAG_NUM_DOCS, help="Number of relevant context chunks to use for LLM.") # Changed help text
     rec_parser.add_argument("--general", action="store_true", help="Enable Hybrid RAG mode (LLM uses general knowledge + context). Default is Strict RAG.")
     rec_parser.add_argument("--concise", action="store_true", help="Use a concise prompt for the LLM, potentially faster but less conversational.")
-    # Stream argument handled globally now
 
     # --- Find ArXiv Command ---
     find_arxiv_parser = subparsers.add_parser("find_arxiv", help="Directly search arXiv without RAG.")
@@ -855,7 +807,6 @@ async def main_cli(): # Renamed to avoid conflict with main function in app.py
 
     # --- Rebuild Index Command ---
     rebuild_parser = subparsers.add_parser("rebuild_index", help="Force rebuild of BM25 index and embeddings from existing metadata.")
-    # No specific args for rebuild_index other than global ones
 
     # Global arguments
     parser.add_argument("--data-path", type=str, default=config.DATA_DIR, help="Path to the data directory.") # Kept for potential future use if config.DATA_DIR needs override
@@ -937,12 +888,9 @@ async def main_cli(): # Renamed to avoid conflict with main function in app.py
         try:
             if loaded_recommender is None: load_components()
         except RuntimeError as e:
-            # Keep this error print as it's a CLI operational error
             print(f"Error loading components for recommendation: {e}", file=sys.stderr)
             sys.exit(1)
 
-        # Comment out or remove print statements related to displaying results in the CLI
-        # print(f"Processing query: '{args.query}' (General: {args.general}, Concise: {args.concise}, Stream: {args.stream})")
         logger.info(f"CLI: Processing query: '{args.query}' (General: {args.general}, Concise: {args.concise}, Stream: {args.stream})") # Log instead of printing
         
         response_gen, sources, _ = await run_recommendation(args.query, args.num_results, args.general, args.concise)
@@ -958,7 +906,7 @@ async def main_cli(): # Renamed to avoid conflict with main function in app.py
                 # print() 
             except Exception as e:
                 # Keep this error print as it's a CLI operational error
-                print(f"\\nError during streaming: {e}", file=sys.stderr) # Changed to sys.stderr
+                print(f"\\nError during streaming: {e}", file=sys.stderr)
                 logger.error(f"Error streaming LLM response: {e}", exc_info=True)
         else:
             # print("\\nLLM Response (Collected):")
@@ -969,7 +917,7 @@ async def main_cli(): # Renamed to avoid conflict with main function in app.py
                 pass # Consume the generator
             except Exception as e:
                 # Keep this error print as it's a CLI operational error
-                print(f"\\nError collecting non-streamed response: {e}", file=sys.stderr) # Changed to sys.stderr
+                print(f"\\nError collecting non-streamed response: {e}", file=sys.stderr)
                 logger.error(f"Error collecting LLM response: {e}", exc_info=True)
         
         # print("\\n--- Sources ---")
@@ -991,8 +939,8 @@ async def main_cli(): # Renamed to avoid conflict with main function in app.py
                 print(f"  Title: {paper.get('title', 'N/A')}")
                 authors_str = ", ".join(paper.get('authors', [])) if paper.get('authors') else "N/A"
                 print(f"  Authors: {authors_str}")
-                print(f"  Published: {paper.get('published_date', 'N/A')}") # Key was changed
-                print(f"  ID: {paper.get('entry_id', 'N/A')}") # Key was added
+                print(f"  Published: {paper.get('published_date', 'N/A')}")
+                print(f"  ID: {paper.get('entry_id', 'N/A')}")
                 print(f"  PDF URL: {paper.get('pdf_url', 'N/A')}")
                 print(f"  Abstract: {textwrap.shorten(paper.get('summary', 'N/A'), width=150, placeholder='...')}")
         else:

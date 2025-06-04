@@ -54,20 +54,17 @@ BaseGroqException = Exception
 
 # Runtime placeholders for Groq client and specific exceptions
 Groq: Any = None
-_GroqRateLimitErrorRuntime: Type[BaseGroqException] = BaseGroqException # Default to base
-_GroqAPIErrorRuntime: Type[BaseGroqException] = BaseGroqException       # Default to base
+_GroqRateLimitErrorRuntime: Type[BaseGroqException] = BaseGroqException
+_GroqAPIErrorRuntime: Type[BaseGroqException] = BaseGroqException
 
 if TYPE_CHECKING:
-    # For type checker, assume groq is available and import specific types
     from groq import Groq as _GroqClientTyping
-    # Corrected import path for ChatCompletionMessageParam
     from groq.types.chat.chat_completion_message_param import ChatCompletionMessageParam as _CCP_TypeTyping
     from groq.types.chat import ChatCompletion as _CC_TypeTyping
     from groq import RateLimitError as _RateLimitErrorTyping, APIError as _APIErrorTyping
 
     ChatCompletionMessageParamType: TypeAlias = _CCP_TypeTyping
     ChatCompletionType: TypeAlias = _CC_TypeTyping
-    # Define TypeAliases for exception types for more precise type hints in `except` blocks if needed by the checker
     GroqRateLimitError_Hint: TypeAlias = _RateLimitErrorTyping
     GroqAPIError_Hint: TypeAlias = _APIErrorTyping
 else:
@@ -289,8 +286,44 @@ def _call_groq_api_stream(api_key: str, model_id: str, prompt: str, gen_args: Di
     except Exception as e: logger.error(f"Unexpected Groq stream error (model: {model_id}): {e}", exc_info=True); raise
 
 
-# --- Main LLM Dispatcher Functions ---
+# --- Class-based Interface for LLM Services ---
+class LLMInterface:
+    """
+    Class-based interface for LLM services, providing a consistent API for different consumers.
+    This wraps the function-based interface above for easier integration with other components.
+    """
+    
+    def __init__(self):
+        """Initialize the LLMInterface."""
+        pass
+    
+    def get_llm_response_unary(self, prompt: str, generation_args: Optional[Dict[str, Any]] = None) -> Optional[str]:
+        """
+        Get a single response from the LLM (non-streaming).
+        
+        Args:
+            prompt: The input prompt
+            generation_args: Optional generation parameters
+            
+        Returns:
+            The generated response text or None if failed
+        """
+        return get_llm_response(prompt, generation_args)
+    
+    def get_llm_response_stream(self, prompt: str, generation_args: Optional[Dict[str, Any]] = None) -> Generator[str, None, None]:
+        """
+        Get a streaming response from the LLM.
+        
+        Args:
+            prompt: The input prompt
+            generation_args: Optional generation parameters
+            
+        Returns:
+            Generator yielding response chunks
+        """
+        return get_llm_response_stream(prompt, generation_args)
 
+# --- Main LLM Dispatcher Functions ---
 def get_llm_response_stream(prompt: str, generation_args: Optional[Dict[str, Any]] = None) -> Generator[str, None, None]:
     llm_attempts = _get_llm_attempts()
     if not llm_attempts: yield "[Error: No LLM providers configured]"; return
