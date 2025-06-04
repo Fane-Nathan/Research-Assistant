@@ -4,7 +4,7 @@
 
 ## 🌐 Live Demo
 
-**Try it now:** [https://research-assistant-flx.streamlit.app/](https://research-assistant-flx.streamlit.app/)
+**Try it now:** [https://research-assistant-docs-eyuoftmxdhyzfhtd2pnwvh.streamlit.app/](https://research-assistant-docs-eyuoftmxdhyzfhtd2pnwvh.streamlit.app/)
 
 Experience the full functionality through our interactive web interface:
 - 📚 Research paper search and analysis

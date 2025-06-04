@@ -44,12 +44,12 @@ def test_search_functionality():
         
         # Check if data can be loaded
         try:
-            data_manager.load_data()
+            # DataManager loads data during initialization; no need to call load_data()
             print("✓ Data loaded successfully")
             
             # Get basic stats
-            docs = data_manager.get_documents()
-            embeddings = data_manager.get_embeddings()
+            docs = data_manager.documents
+            embeddings = data_manager.embeddings
             
             print(f"✓ Found {len(docs)} documents")
             print(f"✓ Found {len(embeddings)} embeddings")
@@ -76,13 +76,19 @@ def test_search_functionality():
         print(f"✓ Testing search with query: '{test_query}'")
         
         try:
-            results = recommender.recommend(test_query, docs, embeddings, params)
+            results = recommender.recommend(
+                test_query,
+                docs,
+                embeddings,
+                **vars(params)
+            )
             print(f"✓ Search completed successfully - found {len(results)} results")
             
             if results:
                 print("\nSample result:")
-                print(f"  Title: {results[0].get('title', 'N/A')[:100]}...")
-                print(f"  Score: {results[0].get('score', 'N/A')}")
+                doc, score = results[0]
+                print(f"  Title: {doc.get('title', 'N/A')[:100]}...")
+                print(f"  Score: {score}")
             
             return True
             
