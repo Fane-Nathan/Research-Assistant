@@ -1,12 +1,3 @@
-"""
-Evaluation module for assessing RAG system performance.
+from .retrieval_evaluator import RetrievalEvaluator, RetrievalEvaluationMetrics
 
-This module provides metrics and tools for evaluating both retrieval quality
-and generation quality of the RAG system.
-"""
-
-from .generation_metrics import GenerationEvaluationMetrics
-
-__all__ = [
-    "GenerationEvaluationMetrics",
-]
+__all__ = ["RetrievalEvaluator", "RetrievalEvaluationMetrics"]
