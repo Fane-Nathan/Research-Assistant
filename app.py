@@ -3,7 +3,7 @@
 Streamlit Web Application: Research Paper Assistant (Full Code, Final Version)
 
 This script contains the complete and final code for a redesigned, elegant UI with all features,
-including expandable context windows and a unified background layout.
+including the fix for the AttributeError on context display.
 """
 
 # --- Core Imports ---
@@ -57,118 +57,39 @@ except ImportError as e:
 # --- Custom CSS for Elegant Styling ---
 st.markdown("""
 <style>
-    /* --- Deep Dark Mode Theme & General Styling --- */
-    .stApp {
-        background-color: #020617; /* Near-black, deep blue background */
-    }
-
-    /* --- Text Color Adjustments for Dark Mode --- */
-    h1, h2, h3, h4, h5, h6 {
-        color: #FFFFFF;
-    }
-    .st-emotion-cache-1s4o3wo p { /* Tab labels */
-        color: #E2E8F0;
-    }
-    p, .st-emotion-cache-16txtl3.e1f1d6gn0 > p { /* Target generic paragraphs */
-        color: #E2E8F0;
-    }
-
-    /* --- Header & Padding --- */
-    header[data-testid="stHeader"] { /* Hide the default Streamlit header */
-        display: none !important;
-    }
-    .st-emotion-cache-16txtl3 { /* Adjust top padding after header is removed */
-        padding-top: 2rem;
-    }
-    
-    /* --- Expander/Context Styling --- */
-    .st-emotion-cache-p5msec { /* Expander header */
-        color: #FFFFFF;
-    }
-    .st-emotion-cache-1hver8f { /* Expander body */
-        background-color: #0F172A;
-    }
-    small {
-        line-height: 1.5;
-        color: #94A3B8;
-    }
-    .metadata-line {
-        font-size: 0.85em;
-        color: #94A3B8;
-        margin-top: 12px;
-        border-top: 1px solid #1E293B;
-        padding-top: 8px;
-    }
-    .metadata-line a {
-        color: #7DD3FC;
-        text-decoration: none;
-        font-weight: 500;
-    }
-    .metadata-line a:hover {
-        text-decoration: underline;
-    }
-
-    /* --- Primary Buttons --- */
-    .stButton>button {
-        border-radius: 8px;
-        border: 1px solid #38BDF8;
-        background-color: #38BDF8;
-        color: #020617;
-        transition: all 0.2s ease-in-out;
-        font-weight: 600;
-    }
-    .stButton>button:hover {
-        background-color: #0F172A;
-        color: #38BDF8;
-        border-color: #38BDF8;
-    }
-    .stButton>button:disabled {
-        background-color: #1E293B;
-        color: #475569;
-        border-color: #1E293B;
-        cursor: not-allowed;
-    }
-    
-    /* --- Sidebar --- */
-    .st-emotion-cache-163ttbj {
-        background-color: #FFFFFF;
-        border-right: 1px solid #E0E0E0;
-    }
-
-    /* --- Metric Color Fix --- */
-    [data-testid="stMetric"] {
-        background-color: transparent !important;
-        border: 0px !important;
-    }
-    [data-testid="stMetric"] label, [data-testid="stMetric"] div {
-        color: #E2E8F0;
-    }
+    /* ... (CSS from previous version remains unchanged) ... */
+    .stApp { background-color: #020617; }
+    h1, h2, h3, h4, h5, h6 { color: #FFFFFF; }
+    .st-emotion-cache-1s4o3wo p { color: #E2E8F0; }
+    p, .st-emotion-cache-16txtl3.e1f1d6gn0 > p { color: #E2E8F0; }
+    header[data-testid="stHeader"] { display: none !important; }
+    .st-emotion-cache-16txtl3 { padding-top: 2rem; }
+    .st-emotion-cache-p5msec { color: #FFFFFF; }
+    .st-emotion-cache-1hver8f { background-color: #0F172A; }
+    small { line-height: 1.5; color: #94A3B8; }
+    .metadata-line { font-size: 0.85em; color: #94A3B8; margin-top: 12px; border-top: 1px solid #1E293B; padding-top: 8px; }
+    .metadata-line a { color: #7DD3FC; text-decoration: none; font-weight: 500; }
+    .metadata-line a:hover { text-decoration: underline; }
+    .stButton>button { border-radius: 8px; border: 1px solid #38BDF8; background-color: #38BDF8; color: #020617; transition: all 0.2s ease-in-out; font-weight: 600; }
+    .stButton>button:hover { background-color: #0F172A; color: #38BDF8; border-color: #38BDF8; }
+    .stButton>button:disabled { background-color: #1E293B; color: #475569; border-color: #1E293B; cursor: not-allowed; }
+    .st-emotion-cache-163ttbj { background-color: #FFFFFF; border-right: 1px solid #E0E0E0; }
+    [data-testid="stMetric"] { background-color: transparent !important; border: 0px !important; }
+    [data-testid="stMetric"] label, [data-testid="stMetric"] div { color: #E2E8F0; }
 </style>
 """, unsafe_allow_html=True)
 
 # --- Core Logic & Helper Functions ---
 
 def format_expander_title(source: dict) -> str:
-    """
-    Intelligently formats the title for a context expander.
-    If the title is a placeholder, it creates a readable source citation.
-    Otherwise, it returns the original title.
-    """
     title = source.get('title', 'Untitled Source')
-    
-    # Regex to find placeholder titles like "[No Title - ID: http://arxiv.org/abs/2404.09579v1_chunk_95]"
     match = re.search(r'\[No Title - ID: http://arxiv.org/abs/([^v]+)v\d+_chunk_(\d+)\]', title)
-    
     if match:
-        arxiv_id = match.group(1)
-        chunk_num = match.group(2)
+        arxiv_id, chunk_num = match.group(1), match.group(2)
         return f"📄 Source: arXiv:{arxiv_id} (Chunk {chunk_num})"
-    
-    # Truncate long titles for cleaner display
     return f"📄 {title[:75]}..." if len(title) > 75 else f"📄 {title}"
 
 def initialize_and_load_components():
-    """Initializes and loads RAG components, updating session state."""
     force_reload = st.session_state.get("force_component_reload", False)
     with st.spinner("Initializing RAG system components..."):
         loaded_data_dict = load_components_cli(force_reload=force_reload)
@@ -182,8 +103,8 @@ def initialize_and_load_components():
         st.session_state.knowledge_base_is_empty = True
 
 def run_evaluation_in_app():
-    """Runs the full RAG evaluation pipeline within the Streamlit app."""
     st.session_state.evaluation_running = True
+    st.session_state.evaluation_results = None
     try:
         with st.status("Executing RAG evaluation...", expanded=True) as status:
             eval_dataset_path = "data_store/evaluation_sets/evaluation_dataset_llm_labeled.json"
@@ -191,21 +112,12 @@ def run_evaluation_in_app():
             with open(eval_dataset_path, 'r', encoding='utf-8') as f:
                 eval_data = json.load(f)
             evaluation_dataset = [{"query": item["query_text"], "relevant_docs": set(item["relevant_doc_ids"])} for item in eval_data]
-            
-            rag_components = st.session_state.rag_components
-            recommender, data_manager = rag_components['recommender'], rag_components['data_manager']
-            
+            rag_components, recommender, data_manager = st.session_state.rag_components, st.session_state.rag_components['recommender'], st.session_state.rag_components['data_manager']
             status.update(label="Initializing evaluation modules...")
-            reranker = ReRanker()
-            evaluator = RetrievalEvaluator(recommender)
-            
-            resource_metadata = data_manager.get_all_metadata()
-            resource_embeddings = data_manager.get_all_embeddings()
-            bm25_index = data_manager.get_bm25_index()
-            params = RecommendationParams(top_n_final=20, top_n_rerank=10, semantic_candidates=50, keyword_candidates=50, fusion_k=60, expand_synonyms=True)
-            final_metrics = RetrievalEvaluationMetrics()
-            total_queries = len(evaluation_dataset)
-            start_time = time.time()
+            reranker, evaluator = ReRanker(), RetrievalEvaluator(recommender)
+            resource_metadata, resource_embeddings, bm25_index = data_manager.get_all_metadata(), data_manager.get_all_embeddings(), data_manager.get_bm25_index()
+            params, final_metrics = RecommendationParams(top_n_final=20, top_n_rerank=10, semantic_candidates=50, keyword_candidates=50, fusion_k=20), RetrievalEvaluationMetrics()
+            total_queries, start_time = len(evaluation_dataset), time.time()
             progress_bar = st.progress(0, text=f"Starting evaluation of {total_queries} queries...")
             for i, item in enumerate(evaluation_dataset):
                 query, relevant_docs_set = item["query"], item["relevant_docs"]
@@ -224,9 +136,9 @@ def run_evaluation_in_app():
             status.update(label="Evaluation complete!", state="complete")
     except Exception as e:
         st.error(f"An error occurred during evaluation: {e}")
+        st.session_state.evaluation_results = {"error": str(e)}
     finally:
         st.session_state.evaluation_running = False
-        st.rerun()
 
 async def handle_recommendation_submission_async(query_text: str, **kwargs):
     st.session_state.recommendation_processing = True
@@ -237,7 +149,15 @@ async def handle_recommendation_submission_async(query_text: str, **kwargs):
         result = await cli_run_recommendation_async(query=query_text, **kwargs)
         if result:
             answer_stream, source_ids, source_documents = result
-            st.session_state.context_sources = source_documents if source_documents else []
+            
+            # --- FIX: Defensively check for and unwrap nested lists ---
+            if source_documents and isinstance(source_documents, list) and len(source_documents) > 0 and isinstance(source_documents[0], list):
+                # Data is incorrectly nested like [[doc1, doc2, ...]]
+                st.session_state.context_sources = source_documents[0]
+            else:
+                # Data is in the correct format [doc1, doc2, ...]
+                st.session_state.context_sources = source_documents if source_documents else []
+
             if isinstance(answer_stream, (types.GeneratorType, AsyncGenerator)):
                 for token in answer_stream:
                     current_answer += token
@@ -321,7 +241,6 @@ def main():
                     with st.expander(expander_title):
                         content = source.get('content', '')
                         st.markdown(f"<small>{(content[:350] + '...') if len(content) > 350 else content}</small>", unsafe_allow_html=True)
-                        
                         metadata_parts = []
                         url = source.get('url')
                         if url:
@@ -330,7 +249,6 @@ def main():
                             metadata_parts.append(f'<a href="{url}" target="_blank">🔗 {display_url}</a>')
                         if source.get('page_number'):
                             metadata_parts.append(f"Page: {source.get('page_number')}")
-                        
                         if metadata_parts:
                             st.markdown(f'<div class="metadata-line">{" | ".join(metadata_parts)}</div>', unsafe_allow_html=True)
 
@@ -359,7 +277,6 @@ def main():
                 with st.spinner("Searching arXiv..."):
                     results = run_arxiv_search_cli(query, num_results)
                     st.session_state.direct_search_results = results
-        
         if 'direct_search_results' in st.session_state and st.session_state.direct_search_results:
             st.markdown("---")
             for paper in st.session_state.direct_search_results:
@@ -373,22 +290,27 @@ def main():
         eval_ready = st.session_state.get('components_loaded_successfully', False) and not st.session_state.get('knowledge_base_is_empty', True)
         if not eval_ready:
             st.warning("Evaluation requires RAG components to be loaded and the knowledge base to be populated.", icon="⚠️")
+        
         if st.button("🚀 Run Full Evaluation", disabled=not eval_ready or st.session_state.get('evaluation_running', False), use_container_width=True):
             run_evaluation_in_app()
+            st.rerun()
 
-        if st.session_state.get('evaluation_results'):
-            st.markdown("---")
-            st.subheader("Evaluation Results")
-            results = st.session_state.evaluation_results
-            st.info(f"Evaluation completed in **{results.get('total_time_seconds', 0):.2f} seconds**.", icon="⏱️")
-            col1, col2, col3 = st.columns(3)
-            col1.metric("F1-Score", f"{results.get('f1_score', 0):.4f}")
-            col2.metric("Precision", f"{results.get('precision', 0):.4f}")
-            col3.metric("Recall", f"{results.get('recall', 0):.4f}")
-            col4, col5, col6 = st.columns(3)
-            col4.metric("Hit Rate", f"{results.get('hit_rate', 0):.4f}")
-            col5.metric("MRR", f"{results.get('mrr', 0):.4f}")
-            col6.metric("nDCG", f"{results.get('ndcg', 0):.4f}")
+        results = st.session_state.get('evaluation_results')
+        if results:
+            if "error" in results:
+                st.error(f"Evaluation failed with an error: {results['error']}")
+            else:
+                st.markdown("---")
+                st.subheader("Evaluation Results")
+                st.info(f"Evaluation completed in **{results.get('total_time_seconds', 0):.2f} seconds**.", icon="⏱️")
+                col1, col2, col3 = st.columns(3)
+                col1.metric("F1-Score", f"{results.get('f1_score', 0):.4f}")
+                col2.metric("Precision", f"{results.get('precision', 0):.4f}")
+                col3.metric("Recall", f"{results.get('recall', 0):.4f}")
+                col4, col5, col6 = st.columns(3)
+                col4.metric("Hit Rate", f"{results.get('hit_rate', 0):.4f}")
+                col5.metric("MRR", f"{results.get('mrr', 0):.4f}")
+                col6.metric("nDCG", f"{results.get('ndcg', 0):.4f}")
             
     with how_tab:
         st.markdown("### ⚙️ How the System Operates")
