@@ -23,8 +23,11 @@ class RecommendationParams:
     """Parameters for recommendation."""
     semantic_candidates: int
     keyword_candidates: int
-    fusion_k: int # RRF constant for score calculation
-    top_n_final: int # Final number of results to return
+    fusion_k: int
+    top_n_final: int  # This now represents the number of candidates for the re-ranker
+    expand_synonyms: bool = True
+    # --- ADD THIS NEW PARAMETER ---
+    top_n_rerank: int = 5
 
 logger = logging.getLogger(__name__)
 
@@ -344,8 +347,12 @@ class HybridRecommender:
         processed_query = query
         if self.enable_query_preprocessing and self.query_processor:
             try:
-                processed_query = self.query_processor.preprocess_query(query, expand_synonyms=True)
-                logger.info(f"Query preprocessing: '{query}' -> '{processed_query}'")
+                # --- MODIFICATION 2: Use the new parameter from the params object ---
+                processed_query = self.query_processor.preprocess_query(
+                    query, 
+                    expand_synonyms=params.expand_synonyms
+                )
+                logger.info(f"Query preprocessing (synonyms {'enabled' if params.expand_synonyms else 'disabled'}): '{query}' -> '{processed_query}'")
             except Exception as e:
                 logger.error(f"Query preprocessing failed: {e}. Using original query.", exc_info=True)
                 processed_query = query
