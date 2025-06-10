@@ -9,30 +9,32 @@ Main Components:
 - DataManager: Handles data loading, preprocessing, and storage
 - EmbeddingModel: Manages text embeddings via Gemini API
 - LLM Interface: Provides access to language model responses
+- RetrievalEvaluator: Measures the performance of the retrieval algorithm
 
 Usage Example:
     from hybrid_search_rag import HybridRecommender, DataManager, EmbeddingModel
     
     # Initialize components
     embed_model = EmbeddingModel()
-    data_manager = DataManager("data", "metadata.json", "embeddings.npy", "bm25_index.pkl")
+    data_manager = DataManager()
     recommender = HybridRecommender(embed_model)
     
     # Load data and perform search
-    data_manager.load_data()
-    results = recommender.recommend("your query here", data_manager.get_documents())
+    # ...
 """
 
 # Core Classes
 from .retrieval_algorithm.hybrid_recommender import HybridRecommender, RecommendationParams
-from .data_handling import DataManager, combine_and_deduplicate_datasets
+from .data_handling.data_manager import DataManager
+from .data_handling.dataset_combiner import combine_and_deduplicate_datasets
 from .embedding_services.gemini_embedder import EmbeddingModel
 
 # LLM Interface Functions and Class
 from .llm_services.llm_interface import get_llm_response, get_llm_response_stream, LLMInterface
 
 # Evaluation Metrics
-from .evaluation import GenerationEvaluationMetrics
+# CORRECTED: Importing the Retrieval metrics we created
+from .evaluation import RetrievalEvaluator, RetrievalEvaluationMetrics
 
 __version__ = "1.0.0"
 
@@ -48,7 +50,9 @@ __all__ = [
     "get_llm_response_stream",
     
     # Evaluation
-    "GenerationEvaluationMetrics",
+    # CORRECTED: Exposing the Retrieval metrics
+    "RetrievalEvaluator",
+    "RetrievalEvaluationMetrics",
     
     # Supporting Classes
     "RecommendationParams",

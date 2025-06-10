@@ -1,11 +1,13 @@
 import numpy as np
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from hybrid_search_rag.retrieval_algorithm.hybrid_recommender import (
+# All necessary imports from OTHER files are here.
+# The incorrect self-import has been removed.
+from ..retrieval_algorithm.hybrid_recommender import (
     HybridRecommender,
     RecommendationParams,
 )
-from hybrid_search_rag.embedding_services.gemini_embedder import EmbeddingModel
+from ..embedding_services.gemini_embedder import EmbeddingModel
 
 class RetrievalEvaluationMetrics:
     """A class to hold the evaluation metrics for the retrieval algorithm."""
@@ -13,7 +15,6 @@ class RetrievalEvaluationMetrics:
         self.hit_rates: List[float] = []
         self.mrrs: List[float] = []
         self.ndcgs: List[float] = []
-        # Add storage for new metrics
         self.precisions: List[float] = []
         self.recalls: List[float] = []
         self.f1_scores: List[float] = []
@@ -71,11 +72,9 @@ class RetrievalEvaluator:
             
             retrieved_ids = [rec[0].get('entry_id') for rec in recommendations]
 
-            # --- Calculate Ranking Metrics ---
             hit_rate, mrr, ndcg = self._calculate_ranking_metrics(retrieved_ids, relevant_docs_set)
             metrics.update_ranking_metrics(hit_rate, mrr, ndcg)
             
-            # --- Calculate Classification Metrics (from Confusion Matrix) ---
             precision, recall, f1 = self._calculate_classification_metrics(retrieved_ids, relevant_docs_set)
             metrics.update_classification_metrics(precision, recall, f1)
 
@@ -103,15 +102,12 @@ class RetrievalEvaluator:
     ) -> Tuple[float, float, float]:
         """Calculates Precision, Recall, and F1-Score."""
         valid_retrieved_ids = {doc_id for doc_id in retrieved_ids if doc_id is not None}
-        
         true_positives = len(valid_retrieved_ids.intersection(relevant_docs))
         false_positives = len(valid_retrieved_ids) - true_positives
         false_negatives = len(relevant_docs) - true_positives
-        
         precision = true_positives / (true_positives + false_positives) if (true_positives + false_positives) > 0 else 0.0
         recall = true_positives / (true_positives + false_negatives) if (true_positives + false_negatives) > 0 else 0.0
         f1_score = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
-        
         return precision, recall, f1_score
 
     def print_results(self, metrics: RetrievalEvaluationMetrics):
@@ -127,54 +123,3 @@ class RetrievalEvaluator:
         print(f"  RECALL:    {avg_metrics.get('recall', 0.0):.4f}")
         print(f"  F1-SCORE:  {avg_metrics.get('f1_score', 0.0):.4f}")
         print("\n------------------------------------")
-
-
-def run_evaluation_example():
-    """Sets up and runs a simple evaluation example."""
-    print("Running retrieval evaluator example...")
-    
-    embed_model = EmbeddingModel()
-    recommender = HybridRecommender(embed_model)
-
-    resource_metadata = [
-        {"entry_id": "doc1", "text": "the cat sat on the mat"},
-        {"entry_id": "doc2", "text": "the dog chased the cat"},
-        {"entry_id": "doc3", "text": "a bird flew in the sky"},
-        {"entry_id": "doc4", "text": "the fish swims in the sea"}, # Add a non-relevant doc
-    ]
-    
-    texts_to_embed = [item["text"] for item in resource_metadata]
-    resource_embeddings = embed_model.encode(texts=texts_to_embed)
-    
-    from rank_bm25 import BM25Okapi
-    tokenized_corpus = [doc['text'].split(" ") for doc in resource_metadata]
-    bm25_index = BM25Okapi(tokenized_corpus)
-
-    evaluation_dataset = [
-        # Query where one relevant doc is missed
-        {"query": "feline animal", "relevant_docs": {"doc1", "doc2"}}, 
-        # Query where results might include non-relevant items
-        {"query": "pets in nature", "relevant_docs": {"doc1", "doc2", "doc3"}},
-    ]
-
-    params = RecommendationParams(
-        semantic_candidates=3, 
-        keyword_candidates=3, 
-        fusion_k=60,
-        top_n_final=3 # Retrieve top 3 to see trade-offs
-    )
-
-    evaluator = RetrievalEvaluator(recommender)
-    results = evaluator.evaluate(
-        evaluation_dataset=evaluation_dataset,
-        params=params,
-        resource_metadata=resource_metadata,
-        resource_embeddings=resource_embeddings,
-        bm25_index=bm25_index
-    )
-
-    evaluator.print_results(results)
-
-
-if __name__ == "__main__":
-    run_evaluation_example()
