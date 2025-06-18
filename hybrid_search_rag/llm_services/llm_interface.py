@@ -52,7 +52,6 @@ except ImportError:
 GROQ_AVAILABLE = False
 BaseGroqException = Exception 
 
-# Runtime placeholders for Groq client and specific exceptions
 Groq: Any = None
 _GroqRateLimitErrorRuntime: Type[BaseGroqException] = BaseGroqException
 _GroqAPIErrorRuntime: Type[BaseGroqException] = BaseGroqException
@@ -93,7 +92,6 @@ except ImportError:
     # ChatCompletionMessageParamType and ChatCompletionType use their `else` definitions from TYPE_CHECKING.
     pass
 
-# Assign the (potentially updated) exception classes to the names used in `except` blocks
 GroqRateLimitError = _GroqRateLimitErrorRuntime
 GroqAPIError = _GroqAPIErrorRuntime
 
@@ -183,7 +181,7 @@ def _call_google_api_unary(api_key: str, model_id: str, prompt: str, gen_args: D
             if full_text:
                 logger.info(f"Google API unary call successful for model: {model_id}.")
                 return full_text.strip()
-        elif hasattr(response, 'text') and response.text: # Fallback
+        elif hasattr(response, 'text') and response.text:
             logger.info(f"Google API unary call successful (using response.text) for model: {model_id}.")
             return response.text.strip()
         
@@ -238,13 +236,11 @@ def _call_groq_api_unary(api_key: str, model_id: str, prompt: str, gen_args: Dic
     try:
         client = Groq(api_key=api_key, timeout=config.LLM_API_TIMEOUT)
         logger.info(f"Sending UNARY request to Groq API (Model: {model_id})...")
-        # Use the TypeAlias here
         messages: List[ChatCompletionMessageParamType] = [{"role": "user", "content": prompt}]
         
         groq_params = {key: gen_args[key] for key in ["temperature", "top_p"] if key in gen_args}
         if "max_output_tokens" in gen_args: groq_params["max_tokens"] = gen_args["max_output_tokens"]
 
-        # Use the TypeAlias here
         completion: ChatCompletionType = client.chat.completions.create(
             messages=messages, model=model_id, stream=False, **groq_params 
         )
@@ -271,7 +267,6 @@ def _call_groq_api_stream(api_key: str, model_id: str, prompt: str, gen_args: Di
     try:
         client = Groq(api_key=api_key, timeout=config.LLM_API_TIMEOUT)
         logger.info(f"Sending STREAMING request to Groq API (Model: {model_id})...")
-        # Use the TypeAlias here
         messages: List[ChatCompletionMessageParamType] = [{"role": "user", "content": prompt}]
         groq_params = {key: gen_args[key] for key in ["temperature", "top_p"] if key in gen_args}
         if "max_output_tokens" in gen_args: groq_params["max_tokens"] = gen_args["max_output_tokens"]

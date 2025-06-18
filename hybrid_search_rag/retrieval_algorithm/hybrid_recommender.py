@@ -24,9 +24,8 @@ class RecommendationParams:
     semantic_candidates: int
     keyword_candidates: int
     fusion_k: int
-    top_n_final: int  # This now represents the number of candidates for the re-ranker
+    top_n_final: int
     expand_synonyms: bool = True
-    # --- ADD THIS NEW PARAMETER ---
     top_n_rerank: int = 5
 
 logger = logging.getLogger(__name__)

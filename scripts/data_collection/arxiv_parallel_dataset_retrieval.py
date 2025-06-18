@@ -16,21 +16,20 @@ import os
 import sys
 import logging
 import time
-from typing import Any, Dict, List, Optional, Tuple, Union # Keep this line
+from typing import Any, Dict, List, Optional, Tuple, Union 
 import requests
-import fitz # PyMuPDF
+import fitz
 import json
 import io
 import re
 import random
 from tqdm import tqdm
-import arxiv # Ensure this library is installed: pip install arxiv
-import tenacity # For retrying network operations
+import arxiv 
+import tenacity
 from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FuturesTimeoutError
-import gc # For explicit garbage collection, if needed
+import gc
 import argparse
 
-# Global logger instance (to be configured in main)
 logger = logging.getLogger("ArxivDataCollector")
 
 # --- Helper Functions ---
@@ -91,7 +90,7 @@ def retry_if_network_error_or_server_issue(exception):
     if isinstance(exception, (requests.exceptions.Timeout, requests.exceptions.ConnectionError)):
         return True
     if isinstance(exception, requests.exceptions.HTTPError):
-        if exception.response.status_code in [500, 502, 503, 504]: # Server-side issues
+        if exception.response.status_code in [500, 502, 503, 504]:
             return True
     return False
 
@@ -301,14 +300,13 @@ def setup_logger(log_level_str: str, project_root: str, log_dir_name: str, log_f
 def run_data_generation_pipeline(config: Dict[str, Any], dry_run: bool, force_reprocess: bool) -> Dict[str, Any]:
     logger.info(f"--- Starting Data Generation Pipeline ---")
     logger.info(f"Run Mode: {'Dry Run' if dry_run else 'Normal'}{' (Force Reprocess Enabled)' if force_reprocess and not dry_run else ''}")
-    # Sourcing all parameters from the 'config' dictionary
     logger.info(f"Primary Target Categories: {config.get('primary_target_categories_for_discovery', 'N/A')}")
     logger.info(f"Max results per primary category: {config.get('max_results_per_primary_category_search', 'N/A')}")
     logger.info(f"Overall max papers to process: {config.get('max_papers_to_process', 'Unlimited')}")
     logger.info(f"Processing batch size: {config.get('processing_batch_size', 'N/A')}")
     logger.info(f"Using {config.get('num_workers', 'N/A')} worker threads. Outputting to: {config.get('output_source_documents_file', 'N/A')}")
     logger.info(f"Filter categories: {len(config.get('filter_categories', []))} specified")
-    worker_timeout_seconds = config.get('worker_processing_timeout_seconds') # No default here, assume it's in config
+    worker_timeout_seconds = config.get('worker_processing_timeout_seconds')
     logger.info(f"Individual paper processing timeout: {worker_timeout_seconds} seconds.")
     logger.info(f"---------------------------------------------------------------")
 
@@ -321,17 +319,16 @@ def run_data_generation_pipeline(config: Dict[str, Any], dry_run: bool, force_re
         'error_summary': {}
     }
 
-    # All these variables are now sourced directly from the 'config' dictionary
-    output_file = config['output_source_documents_file'] # Assumed to be present by now
+    output_file = config['output_source_documents_file'] 
     primary_target_categories = config['primary_target_categories_for_discovery']
     max_results_per_primary_cat = config['max_results_per_primary_category_search']
-    max_total_papers_to_process = config['max_papers_to_process'] # Can be None
+    max_total_papers_to_process = config['max_papers_to_process'] 
     filter_categories_list = config['filter_categories']
     processing_batch_size = config['processing_batch_size']
     num_workers = config['num_workers']
     api_delay = config['arxiv_api_delay_per_id']
     fetch_timeout = config['requests_timeout']
-    max_runtime_seconds = config['max_runtime_seconds'] # Can be None
+    max_runtime_seconds = config['max_runtime_seconds']
     log_interval_seconds = config['progress_log_interval']
 
     retry_settings_for_worker = {
@@ -341,7 +338,7 @@ def run_data_generation_pipeline(config: Dict[str, Any], dry_run: bool, force_re
         'wait_exponential_max_seconds': config['retry_wait_exponential_max_seconds']
     }
 
-    if not output_file or not primary_target_categories: # Basic check
+    if not output_file or not primary_target_categories: 
         logger.error("Essential configuration (output_file or primary_target_categories) is missing in effective_config. Cannot proceed.")
         return stats
 
@@ -446,7 +443,7 @@ def run_data_generation_pipeline(config: Dict[str, Any], dry_run: bool, force_re
             for batch_num in range(total_batches):
                 if max_runtime_seconds is not None and (time.time() - start_run_time) > max_runtime_seconds:
                     logger.warning("Reached MAX_RUNTIME_SECONDS limit before starting new batch.")
-                    return stats # Exit before starting a new batch if runtime exceeded
+                    return stats
 
                 batch_start_index = batch_num * processing_batch_size
                 batch_end_index = batch_start_index + processing_batch_size
@@ -493,7 +490,7 @@ def run_data_generation_pipeline(config: Dict[str, Any], dry_run: bool, force_re
                     current_process_time = time.time()
                     if max_runtime_seconds is not None and (current_process_time - start_run_time) > max_runtime_seconds:
                         logger.warning("Reached MAX_RUNTIME_SECONDS limit during result processing. Shutting down.")
-                        for f_cancel in futures_to_ids: # Cancel pending futures in the current batch
+                        for f_cancel in futures_to_ids:
                             if not f_cancel.done(): f_cancel.cancel()
                         return stats
 
@@ -505,7 +502,6 @@ def run_data_generation_pipeline(config: Dict[str, Any], dry_run: bool, force_re
                         remaining_to_process_count = len(final_ids_for_this_run) - total_attempted_items_in_run
                         eta_str = f"~{(remaining_to_process_count / papers_per_sec) / 3600:.1f}h" if papers_per_sec > 0 and remaining_to_process_count > 0 else "N/A"
                         
-                        # max_rt_s is already defined as max_runtime_seconds
                         if max_runtime_seconds is not None:
                              remaining_runtime_sec = max(0, max_runtime_seconds - elapsed_total_time)
                              if papers_per_sec <= 0 or (remaining_to_process_count / papers_per_sec > remaining_runtime_sec):
@@ -584,10 +580,9 @@ def main():
     
     # Determine the directory for config import
     # Priority: CLI arg -> Environment Variable -> Script's guess
-    config_package_parent_dir = args.config_dir # From CLI
+    config_package_parent_dir = args.config_dir
     
     if not config_package_parent_dir:
-        # Try an environment variable as a fallback for config_dir
         config_package_parent_dir = os.getenv("HYBRID_RAG_CONFIG_DIR")
         if config_package_parent_dir:
             print(f"Using HYBRID_RAG_CONFIG_DIR environment variable for config path: {config_package_parent_dir}")
@@ -595,7 +590,7 @@ def main():
     if config_package_parent_dir:
         if not os.path.isdir(config_package_parent_dir):
             print(f"Error: Provided config directory '{config_package_parent_dir}' does not exist or is not a directory. Attempting script's default discovery...", file=sys.stderr)
-            config_package_parent_dir = None # Fallback to script's logic
+            config_package_parent_dir = None
         else:
             print(f"Attempting to load config from specified directory: {config_package_parent_dir}")
             if config_package_parent_dir not in sys.path:
@@ -605,7 +600,7 @@ def main():
     if not config_package_parent_dir:
         print("Config directory not specified via --config-dir or HYBRID_RAG_CONFIG_DIR. Using script's default discovery logic.")
         current_script_dir = os.path.dirname(os.path.abspath(__file__))
-        config_package_parent_dir = os.path.dirname(os.path.dirname(current_script_dir)) # Corrected: project_root is two levels up from scripts/data_collection
+        config_package_parent_dir = os.path.dirname(os.path.dirname(current_script_dir))
         if config_package_parent_dir not in sys.path:
             sys.path.insert(0, config_package_parent_dir)
         print(f"Attempting to load config from script's determined parent directory: {config_package_parent_dir}")
@@ -621,11 +616,11 @@ def main():
     except ImportError as e:
         print(f"Warning: Could not import 'hybrid_search_rag.config': {e}. This may be due to incorrect path or missing __init__.py in 'hybrid_search_rag'.", file=sys.stderr)
         print(f"Checked sys.path includes: {config_package_parent_dir}", file=sys.stderr)
-        effective_config['project_root'] = config_package_parent_dir or os.path.dirname(os.path.dirname(os.path.abspath(__file__))) # Fallback
+        effective_config['project_root'] = config_package_parent_dir or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         print(f"Using fallback PROJECT_ROOT: {effective_config['project_root']}. Ensure this is correct for output/log paths.", file=sys.stderr)
     except Exception as e:
         print(f"CRITICAL ERROR during config import or PROJECT_ROOT setup: {e}", file=sys.stderr)
-        effective_config['project_root'] = os.getcwd() # Last resort
+        effective_config['project_root'] = os.getcwd()
         print(f"Using CWD as PROJECT_ROOT due to error: {effective_config['project_root']}", file=sys.stderr)
 
 
@@ -691,7 +686,7 @@ def main():
             'nlin.AO', 'nlin.PS',
             'quant-ph'
         ],
-        "max_papers_to_process": 100000, # Explicitly None for unlimited unless set
+        "max_papers_to_process": 100000,
         "num_workers": 12,
         "requests_timeout": 300,
         "arxiv_api_delay_per_id": 0.25,
@@ -700,9 +695,9 @@ def main():
         "retry_wait_exponential_multiplier": 1,
         "retry_wait_exponential_min_seconds": 5,
         "retry_wait_exponential_max_seconds": 30,
-        "log_dir_name": "logs_arxiv_collection_fallback", # Different name for fallback logs
+        "log_dir_name": "logs_arxiv_collection_fallback",
         "log_filename": "arxiv_collection_fallback.log",
-        "output_data_subdir": "output_data_arxiv_fallback", # Different name for fallback output
+        "output_data_subdir": "output_data_arxiv_fallback",
         "output_filename": "arxiv_default_output_fallback.jsonl",
         "log_level": "INFO",
         "max_runtime_seconds": None,
@@ -713,9 +708,8 @@ def main():
         "arxiv_discovery_num_retries": 500,
     }
 
-    # Populate effective_config: Defaults -> config.py values
     for script_key, default_value in script_defaults_for_fallback.items():
-        effective_config[script_key] = default_value # Start with fallback default
+        effective_config[script_key] = default_value 
 
     if project_config_module:
         print(f"Loading configurations from imported 'hybrid_search_rag.config' module.")
@@ -723,11 +717,9 @@ def main():
             if hasattr(project_config_module, config_py_key):
                 effective_config[script_key] = getattr(project_config_module, config_py_key)
             else:
-                # If key is not in config.py, it keeps the script_defaults_for_fallback value
                 print(f"Info: Config key '{config_py_key}' for '{script_key}' not in config.py. Using script default: {effective_config[script_key]}")
-    else: # project_config_module could not be loaded
+    else:
         print("Warning: 'hybrid_search_rag.config' module not loaded. Using script defaults for all arXiv processing parameters.", file=sys.stderr)
-        # All values in effective_config are already from script_defaults_for_fallback
 
     # Apply CLI overrides (highest precedence)
     if args.max_papers is not None: effective_config['max_papers_to_process'] = args.max_papers
@@ -744,7 +736,7 @@ def main():
         if os.path.isabs(output_filename_cli):
             effective_config['output_source_documents_file'] = output_filename_cli
         else: # It's a relative filename, use it instead of the one from config
-            effective_config['output_filename'] = output_filename_cli # Update the filename part
+            effective_config['output_filename'] = output_filename_cli
             effective_config['output_source_documents_file'] = os.path.join(
                 effective_config['project_root'],
                 effective_config['output_data_subdir'], # subdir from config/defaults
@@ -763,7 +755,7 @@ def main():
         effective_config['log_dir_name'], 
         effective_config['log_filename']
     )
-    effective_config['log_file_path_full'] = log_file_full_path # For summary display
+    effective_config['log_file_path_full'] = log_file_full_path
 
     logger.info("--- arXiv Data Collector ---")
     logger.info(f"Using PROJECT_ROOT: {effective_config['project_root']}")
@@ -772,7 +764,7 @@ def main():
     logger.info(f"Output File: {effective_config['output_source_documents_file']}")
     
     print("\n--- Effective Configuration for this Run ---")
-    for key in sorted(effective_config.keys()): # Print all effective configs
+    for key in sorted(effective_config.keys()):
         value = effective_config[key]
         if key in ['filter_categories', 'primary_target_categories_for_discovery'] and isinstance(value, list):
             print(f"  {key:45s}: [{len(value)} categories specified]")
@@ -788,7 +780,7 @@ def main():
 
     try:
         run_stats = run_data_generation_pipeline(
-            config=effective_config, # Pass the fully resolved config
+            config=effective_config,
             dry_run=args.dry_run,
             force_reprocess=args.force_reprocess
         )
@@ -821,7 +813,7 @@ def main():
             
             if run_stats.get('error_summary'):
                 logger.info("Error Summary:")
-                for err_msg, count in sorted(run_stats['error_summary'].items()): # Sort for consistent output
+                for err_msg, count in sorted(run_stats['error_summary'].items()):
                     logger.info(f"  - \"{err_msg}\": {count} times")
 
             logger.info(f"Source documents output to: {effective_config.get('output_source_documents_file', 'N/A')}")

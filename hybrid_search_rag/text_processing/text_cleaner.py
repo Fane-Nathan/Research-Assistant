@@ -758,12 +758,10 @@ def _extract_content_with_fallback(item: Dict[str, Any], cleaning_level: Cleanin
         content = None
         
         if isinstance(candidate, tuple):
-            # Nested field in metadata
             if candidate[0] in item and isinstance(item[candidate[0]], dict):
                 if candidate[1] in item[candidate[0]] and item[candidate[0]][candidate[1]]:
                     content = item[candidate[0]][candidate[1]]
         else:
-            # Direct field
             if candidate in item and item[candidate]:
                 content = item[candidate]
         
@@ -771,7 +769,6 @@ def _extract_content_with_fallback(item: Dict[str, Any], cleaning_level: Cleanin
             item['content'] = clean_academic_content(content, cleaning_level)
             return item
     
-    # Placeholder for missing content
     item['content'] = "Content not available. This may be a reference-only entry."
     return item
 
@@ -780,22 +777,18 @@ def _extract_page_number(item: Dict[str, Any]) -> Dict[str, Any]:
     if 'page_number' in item and item['page_number']:
         return item
     
-    # Check metadata
     if 'metadata' in item and isinstance(item['metadata'], dict):
         for page_field in ['page_number', 'page', 'page_num', 'page_start']:
             if page_field in item['metadata'] and item['metadata'][page_field]:
                 item['page_number'] = str(item['metadata'][page_field])
                 return item
     
-    # Extract from content
     if 'content' in item and isinstance(item['content'], str):
-        # Look for page markers
         page_match = PRECOMPILED_PATTERNS['page_number'].search(item['content'])
         if page_match:
             item['page_number'] = page_match.group(1)
             return item
         
-        # Look for page numbers in brackets
         page_bracket_match = PRECOMPILED_PATTERNS['page_bracket'].search(item['content'])
         if page_bracket_match:
             item['page_number'] = page_bracket_match.group(1)
@@ -806,7 +799,6 @@ def _extract_page_number(item: Dict[str, Any]) -> Dict[str, Any]:
 def _extract_url_with_fallback(item: Dict[str, Any]) -> Dict[str, Any]:
     """Extract URL using fallback approach and handle arXiv conversions."""
     if 'url' in item and item['url']:
-        # Convert arXiv format if needed
         if isinstance(item['url'], str):
             arxiv_match = PRECOMPILED_PATTERNS['arxiv_id'].match(item['url'])
             if arxiv_match:
@@ -814,27 +806,23 @@ def _extract_url_with_fallback(item: Dict[str, Any]) -> Dict[str, Any]:
                 item['url'] = f"https://arxiv.org/abs/{arxiv_id}"
         return item
     
-    # Check metadata for URL
     if 'metadata' in item and isinstance(item['metadata'], dict):
         for url_field in ['url', 'link', 'source_url', 'href', 'doi_url']:
             if url_field in item['metadata'] and item['metadata'][url_field]:
                 item['url'] = item['metadata'][url_field]
                 return item
     
-    # Use source as URL if it looks like one
     if 'source' in item and isinstance(item['source'], str):
         source = item['source']
         if source.startswith(('http://', 'https://')) or source.startswith('arxiv:'):
             item['url'] = source
             return item
     
-    # Check title for arXiv ID
     if 'title' in item and isinstance(item['title'], str):
         title_arxiv_match = PRECOMPILED_PATTERNS['arxiv_id'].search(item['title'])
         if title_arxiv_match:
             arxiv_id = title_arxiv_match.group(1)
             item['url'] = f"https://arxiv.org/abs/{arxiv_id}"
-            # Clean arXiv ID from title
             item['title'] = re.sub(r'arxiv:\d+\.\d+v?\d*\s*', '', item['title'], flags=re.IGNORECASE).strip()
     
     return item
@@ -852,13 +840,11 @@ def _capitalize_title(title: str) -> str:
     if not title:
         return title
     
-    # Words that should be lowercase in titles (except at beginning)
     lowercase_words = {
         'a', 'an', 'the', 'and', 'but', 'or', 'for', 'nor', 'on', 'at', 
         'to', 'from', 'by', 'in', 'of', 'with', 'as', 'via', 'over', 'under'
     }
     
-    # Words that should always be capitalized a certain way
     special_words = {
         'ai': 'AI', 'ml': 'ML', 'nlp': 'NLP', 'lstm': 'LSTM', 'cnn': 'CNN', 
         'rnn': 'RNN', 'gan': 'GAN', 'bert': 'BERT', 'gpt': 'GPT', 
@@ -867,50 +853,38 @@ def _capitalize_title(title: str) -> str:
         'cf.': 'cf.', 'etc.': 'etc.'
     }
     
-    # Preserve special patterns common in academic titles
-    # Find math expressions, chemical formulas, and other special patterns before splitting
     special_patterns = []
     
     def preserve_special(match):
         special_patterns.append(match.group(0))
         return f"SPECIAL_PATTERN_{len(special_patterns)-1}"
     
-    # Preserve LaTeX-style math
     title = re.sub(r'\$[^$]+\$', preserve_special, title)
     
-    # Preserve variables with subscripts or superscripts
     title = re.sub(r'[A-Za-z0-9]+[_\^][A-Za-z0-9]+', preserve_special, title)
     
-    # Preserve chemical formulas (like H2O, CO2)
     title = re.sub(r'[A-Z][a-z]?[0-9]+(?:[A-Z][a-z]?[0-9]*)*', preserve_special, title)
     
-    # Preserve model/algorithm versions (like GPT-3, BERT-Large)
     title = re.sub(r'[A-Za-z]+-[0-9]+(?:\.[0-9]+)?', preserve_special, title)
     
-    # Split by spaces and process each word
     words = title.split()
     result = []
     
     for i, word in enumerate(words):
-        # Check if this is a preserved special pattern
         if word.startswith("SPECIAL_PATTERN_"):
             pattern_index = int(word[16:])
             result.append(special_patterns[pattern_index])
             continue
             
-        # Handle hyphenated words
         if '-' in word and not word.startswith('-') and not word.endswith('-'):
             hyphen_parts = word.split('-')
             capitalized_parts = []
             
             for j, part in enumerate(hyphen_parts):
-                # Always capitalize first part or after colon
                 if j == 0 or (i > 0 and words[i-1].endswith(':')):
                     capitalized_parts.append(part.capitalize())
-                # Check if it's a special word
                 elif part.lower() in special_words:
                     capitalized_parts.append(special_words[part.lower()])
-                # Check if it should remain lowercase
                 elif part.lower() in lowercase_words:
                     capitalized_parts.append(part.lower())
                 else:
@@ -919,20 +893,14 @@ def _capitalize_title(title: str) -> str:
             result.append('-'.join(capitalized_parts))
             continue
             
-        # Process regular words
-        # First word or word after colon is always capitalized
         if i == 0 or (i > 0 and words[i-1].endswith(':')):
             result.append(word.capitalize())
-        # Check for special words with specific capitalization
         elif word.lower() in special_words:
             result.append(special_words[word.lower()])
-        # Keep lowercase words lowercase (unless they're the first word)
         elif word.lower() in lowercase_words:
             result.append(word.lower())
-        # Words with periods might be abbreviations, keep as is
         elif '.' in word:
             result.append(word)
-        # Default: capitalize the word
         else:
             result.append(word.capitalize())
     
@@ -972,10 +940,8 @@ def clean_context_list(items: List[Dict[str, Any]], cleaning_level: CleaningLeve
                 logger.warning(f"Skipping non-dict item at index {i}: {type(item)}")
                 continue
             
-            # Use the enhanced metadata cleaner
             cleaned_item = clean_context_metadata(item, cleaning_level)
             
-            # Ensure we have a meaningful title
             if not cleaned_item.get('title') or cleaned_item['title'] == "Untitled Document":
                 cleaned_item['title'] = f"Context Item {i+1}"
             
@@ -983,7 +949,6 @@ def clean_context_list(items: List[Dict[str, Any]], cleaning_level: CleaningLeve
             
         except Exception as e:
             logger.error(f"Error cleaning context item {i}: {e}")
-            # Add a placeholder item to maintain list structure
             placeholder_item = {
                 'title': f"Error Processing Item {i+1}",
                 'content': "An error occurred while processing this content.",
@@ -998,7 +963,6 @@ def clean_context_list(items: List[Dict[str, Any]], cleaning_level: CleaningLeve
     
     return cleaned_items
 
-# Utility functions for backward compatibility and convenience
 def clean_title_for_display(title: str) -> str:
     """
     Quick title cleaning for display purposes.
@@ -1041,7 +1005,6 @@ def extract_and_clean_metadata(raw_item: Dict[str, Any], target_fields: Optional
     
     return result
 
-# Performance monitoring utilities
 def benchmark_cleaning_performance(sample_texts: List[str], iterations: int = 100) -> Dict[str, float]:
     """
     Benchmark the performance of different cleaning levels on sample texts.
@@ -1090,7 +1053,6 @@ class TextCleanerConfig:
     def apply_settings(self):
         """Apply the current configuration settings."""
         set_debug_mode(self.enable_debug_mode)
-        # Update LRU cache size if needed
         global _cached_pattern_match
         _cached_pattern_match = lru_cache(maxsize=self.cache_size)(_cached_pattern_match.__wrapped__)
 
@@ -1170,10 +1132,10 @@ def _clean_latex_commands(text: str) -> str:
         text = re.sub(latex_cmd + r'\b', unicode_char, text)
     
     # Handle subscripts and superscripts
-    text = re.sub(r'([a-zA-Z0-9])_\{([^{}]+)\}', r'\1₍\2₎', text)  # Complex subscripts
-    text = re.sub(r'([a-zA-Z0-9])_([a-zA-Z0-9])', r'\1₍\2₎', text)  # Simple subscripts
-    text = re.sub(r'([a-zA-Z0-9])\^\{([^{}]+)\}', r'\1⁽\2⁾', text)  # Complex superscripts
-    text = re.sub(r'([a-zA-Z0-9])\^([a-zA-Z0-9])', r'\1⁽\2⁾', text)  # Simple superscripts
+    text = re.sub(r'([a-zA-Z0-9])_\{([^{}]+)\}', r'\1₍\2₎', text)  
+    text = re.sub(r'([a-zA-Z0-9])_([a-zA-Z0-9])', r'\1₍\2₎', text)  
+    text = re.sub(r'([a-zA-Z0-9])\^\{([^{}]+)\}', r'\1⁽\2⁾', text) 
+    text = re.sub(r'([a-zA-Z0-9])\^([a-zA-Z0-9])', r'\1⁽\2⁾', text)
     
     # Clean common LaTeX environments
     text = re.sub(r'\\begin\{equation\}(.*?)\\end\{equation\}', r'[EQUATION: \1]', text, flags=re.DOTALL)
@@ -1223,60 +1185,47 @@ def clean_academic_text(text: str, is_title: bool = False, cleaning_level: Clean
     if DEBUG_MODE:
         logger.debug(f"Cleaning text (is_title={is_title}, level={cleaning_level.value}): {text[:100]}...")
     
-    # Handle known problematic titles with direct mapping first
     if is_title and cleaning_level in [CleaningLevel.STANDARD, CleaningLevel.AGGRESSIVE]:
         text = _apply_known_title_fixes(text)
         text = _apply_prefix_fixes(text)
     
-    # Normalize Unicode characters early
     text = unicodedata.normalize('NFKC', text)
     
-    # Apply character replacements based on context
     char_replacements = TITLE_CHAR_REPLACEMENTS if is_title else CONTENT_CHAR_REPLACEMENTS
     for old, new in char_replacements.items():
         text = text.replace(old, new)
     
-    # Handle PDF extraction artifacts
     text = _clean_pdf_artifacts(text)
     
-    # Apply academic terminology fixes based on cleaning level
     if cleaning_level == CleaningLevel.AGGRESSIVE:
-        # Process all categories
         for category in ['high_frequency', 'medium_frequency', 'specialized_terms']:
             for separated, together in ACADEMIC_TERMINOLOGY[category].items():
                 if separated in text.lower():
                     pattern = re.compile(re.escape(separated), re.IGNORECASE)
                     text = pattern.sub(together, text)
     elif cleaning_level == CleaningLevel.STANDARD:
-        # Process high and medium frequency terms only
         for category in ['high_frequency', 'medium_frequency']:
             for separated, together in ACADEMIC_TERMINOLOGY[category].items():
                 if separated in text.lower():
                     pattern = re.compile(re.escape(separated), re.IGNORECASE)
                     text = pattern.sub(together, text)
-    # MINIMAL level skips terminology fixes
     
-    # Apply advanced pattern matching for aggressive cleaning
     if cleaning_level == CleaningLevel.AGGRESSIVE:
         text = _apply_partial_word_fixes(text)
         text = _apply_advanced_word_reconstruction(text)
     elif cleaning_level == CleaningLevel.STANDARD:
         text = _apply_partial_word_fixes(text)
     
-    # Apply general spacing fixes
     text = _rejoin_general_spaced_words(text)
     
-    # Clean LaTeX commands if preserve_math is False or for titles
     if not preserve_math or is_title:
         text = _clean_latex_commands(text)
     
-    # Apply context-specific formatting
     if is_title:
         text = _format_title(text, cleaning_level)
     else:
         text = _format_content(text, cleaning_level, preserve_math)
     
-    # Final cleanup
     text = _apply_final_cleanup(text)
     
     if DEBUG_MODE:
@@ -1494,14 +1443,12 @@ def _reconstruct_two_word_combo(combo: str) -> Optional[str]:
 
 def _format_title(text: str, cleaning_level: CleaningLevel) -> str:
     """Apply title-specific formatting."""
-    # Remove potential reference markers at the beginning
     text = re.sub(r'^[\[\(]\s*\d+\s*[\]\)]\s*', '', text)
     
     # Clean title-specific artifacts
     text = PRECOMPILED_PATTERNS['excessive_whitespace'].sub(' ', text)
     text = text.strip()
     
-    # Apply title case formatting for standard and aggressive cleaning
     if cleaning_level in [CleaningLevel.STANDARD, CleaningLevel.AGGRESSIVE]:
         text = _capitalize_title(text)
     
@@ -1509,30 +1456,23 @@ def _format_title(text: str, cleaning_level: CleaningLevel) -> str:
 
 def _format_content(text: str, cleaning_level: CleaningLevel, preserve_math: bool) -> str:
     """Apply content-specific formatting."""
-    # Fix paragraph breaks and spacing
     text = re.sub(r'\n{3,}', '\n\n', text)
     
-    # Add space after period if missing
     text = PRECOMPILED_PATTERNS['period_spacing'].sub(r'. \1', text)
     
-    # Format references properly
     text = PRECOMPILED_PATTERNS['reference_brackets'].sub(r'[\1]', text)
     
-    # Fix spacing around mathematical operators (if not preserving math)
     if not preserve_math:
         text = PRECOMPILED_PATTERNS['math_operators'].sub(r'\1 \2 \3', text)
     
-    # Fix orphaned lines
     text = PRECOMPILED_PATTERNS['orphaned_lines'].sub(r'\1 \2', text)
     
     return text
 
 def _apply_final_cleanup(text: str) -> str:
     """Apply final cleanup operations."""
-    # Remove any N/A markers that might remain
     text = re.sub(r'\bN/A\b', '', text)
     
-    # Remove excessive whitespace
     text = PRECOMPILED_PATTERNS['excessive_whitespace'].sub(' ', text)
     
     return text.strip()

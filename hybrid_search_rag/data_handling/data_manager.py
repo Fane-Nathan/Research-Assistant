@@ -33,10 +33,8 @@ class DataManager:
         self.bm25_path = os.path.join(data_dir, bm25_filename)
         
         try:
-            # Ensure data directory exists, creating it if necessary.
             os.makedirs(self.data_dir, exist_ok=True)
         except OSError as e:
-            # Failure to create directory is often critical.
             logger.error(f"Could not create data directory {self.data_dir}: {e}")
             raise
 
@@ -57,24 +55,20 @@ class DataManager:
             logger.warning("Attempted to save empty metadata list. Skipping save.")
             return
 
-        # Sanity check: Ensure consistency between metadata and embeddings counts.
         if embeddings is not None and len(metadata) != embeddings.shape[0]:
             logger.error(f"Metadata count ({len(metadata)}) mismatch with embeddings count ({embeddings.shape[0]})! Aborting save.")
             raise ValueError("Metadata and embeddings counts must match.")
 
         try:
-            # Save metadata
             logger.info(f"Saving metadata ({len(metadata)} items) to {self.metadata_path}")
             with open(self.metadata_path, 'w', encoding='utf-8') as f:
                 json.dump(metadata, f, indent=2, ensure_ascii=False)
 
-            # Save embeddings
             if embeddings is not None:
                 logger.info(f"Saving embeddings (shape: {embeddings.shape}) to {self.embeddings_path}")
                 np.save(self.embeddings_path, embeddings, allow_pickle=False)
             else:
                 logger.info(f"No embeddings data provided, skipping save to {self.embeddings_path}")
-                # Clean up old file if it exists but isn't being replaced this time.
                 if os.path.exists(self.embeddings_path):
                     try:
                         os.remove(self.embeddings_path)
@@ -82,14 +76,12 @@ class DataManager:
                     except OSError as e:
                         logger.warning(f"Could not remove existing embeddings file {self.embeddings_path}: {e}")
 
-            # Save BM25 index
             if bm25_index is not None:
                 logger.info(f"Saving BM25 index to {self.bm25_path}")
                 with open(self.bm25_path, 'wb') as f:
                     pickle.dump(bm25_index, f)
             else:
                 logger.info(f"No BM25 index provided, skipping save to {self.bm25_path}")
-                # Clean up old file if it exists.
                 if os.path.exists(self.bm25_path):
                     try:
                         os.remove(self.bm25_path)
@@ -99,11 +91,9 @@ class DataManager:
 
             logger.info("Data saving process completed.")
         except IOError as e:
-            # Catches file system errors during write operations.
             logger.error(f"IOError during file writing: {e}")
             raise
         except Exception as e:
-            # Catch-all for other potential errors during saving.
             logger.error(f"Unexpected error during data saving: {e}", exc_info=True)
             raise
 
@@ -182,7 +172,6 @@ class DataManager:
                     bm25_index = pickle.load(f)
                 logger.info("Loaded BM25 index.")
             except (IOError, pickle.UnpicklingError, AttributeError, EOFError, ImportError, IndexError) as e:
-                # Catch various errors related to file reading or unpickling issues.
                 logger.error(f"Failed to load or unpickle BM25 index: {e}")
                 bm25_index = None
             except Exception as e:
@@ -197,12 +186,10 @@ class DataManager:
         Checks if the primary data files exist and are non-empty.
         Returns True if any essential data component is missing or appears empty.
         """
-        # Check metadata file existence and content
         if not os.path.exists(self.metadata_path):
             logger.warning(f"Metadata file missing: {self.metadata_path}")
             return True
             
-        # Check if metadata file is empty or has valid content
         try:
             with open(self.metadata_path, 'r', encoding='utf-8') as f:
                 metadata_content = json.load(f)
@@ -213,12 +200,10 @@ class DataManager:
             logger.error(f"Error reading metadata file: {str(e)}")
             return True
             
-        # Check embeddings file existence
         if not os.path.exists(self.embeddings_path):
             logger.warning(f"Embeddings file missing: {self.embeddings_path}")
             return True
             
-        # Check BM25 index existence
         if not os.path.exists(self.bm25_path):
             logger.warning(f"BM25 index file missing: {self.bm25_path}")
             return True

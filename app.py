@@ -80,7 +80,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- Core Logic & Helper Functions ---
-
 def format_expander_title(source: dict) -> str:
     title = source.get('title', 'Untitled Source')
     match = re.search(r'\[No Title - ID: http://arxiv.org/abs/([^v]+)v\d+_chunk_(\d+)\]', title)
@@ -150,12 +149,9 @@ async def handle_recommendation_submission_async(query_text: str, **kwargs):
         if result:
             answer_stream, source_ids, source_documents = result
             
-            # --- FIX: Defensively check for and unwrap nested lists ---
             if source_documents and isinstance(source_documents, list) and len(source_documents) > 0 and isinstance(source_documents[0], list):
-                # Data is incorrectly nested like [[doc1, doc2, ...]]
                 st.session_state.context_sources = source_documents[0]
             else:
-                # Data is in the correct format [doc1, doc2, ...]
                 st.session_state.context_sources = source_documents if source_documents else []
 
             if isinstance(answer_stream, (types.GeneratorType, AsyncGenerator)):

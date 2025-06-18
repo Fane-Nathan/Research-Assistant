@@ -182,7 +182,7 @@ if __name__ == '__main__':
         except Exception as e:
             logger.error(f"NLTK resources missing for example: {e}")
             logger.error("Please run: python -m nltk.downloader wordnet punkt averaged_perceptron_tagger stopwords")
-            NLTK_AVAILABLE = False # Disable for example if resources are missing
+            NLTK_AVAILABLE = False
 
     qp = QueryProcessor(use_nltk_expansion=NLTK_AVAILABLE)
     

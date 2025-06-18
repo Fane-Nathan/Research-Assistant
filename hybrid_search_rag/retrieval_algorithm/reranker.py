@@ -38,24 +38,19 @@ class ReRanker:
         """
         if not self.model:
             logger.error("ReRanker model is not initialized. Cannot perform re-ranking.")
-            # Return the original ranking with a score of 0.0 as a fallback
             return [(doc, 0.0) for doc in documents]
 
         if not documents:
             return []
 
-        # Create pairs of [query, document_text] for the cross-encoder
         sentence_pairs = [(query, doc.get('text', '')) for doc in documents]
         
         logger.debug(f"Re-ranking {len(documents)} documents for query: '{query[:100]}...'")
         
-        # Predict the relevance scores
         scores = self.model.predict(sentence_pairs)
         
-        # Combine documents with their new scores
         reranked_results = list(zip(documents, scores))
         
-        # Sort the results in descending order based on the new scores
         reranked_results.sort(key=lambda x: x[1], reverse=True)
         
         logger.debug("Re-ranking complete.")

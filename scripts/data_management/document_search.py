@@ -15,7 +15,6 @@ from typing import List, Dict, Any, Set, Tuple, Optional
 from datetime import datetime
 import time
 
-# Add project root to path
 script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(script_dir)
 if project_root not in sys.path:
@@ -42,13 +41,11 @@ class DocumentRepository:
         self.document_hashes = {}
         self.topics = set()
         
-        # Check if storage directory exists
         if not os.path.exists(self.storage_dir):
             logger.warning(f"Document storage directory does not exist: {self.storage_dir}")
         else:
             logger.info(f"Using document storage directory: {self.storage_dir}")
             
-        # Load document hashes if available
         self._load_document_hashes()
     
     def _load_document_hashes(self):
@@ -76,9 +73,7 @@ class DocumentRepository:
         self.topics = set()
         
         try:
-            # Walk through the storage directory
             for dirpath, dirnames, filenames in os.walk(self.storage_dir):
-                # Extract topic from path
                 rel_path = os.path.relpath(dirpath, self.storage_dir)
                 if rel_path == '.':
                     continue
@@ -86,7 +81,6 @@ class DocumentRepository:
                 topic = rel_path.split(os.path.sep)[0] if os.path.sep in rel_path else rel_path
                 self.topics.add(topic)
                 
-                # Process files
                 for filename in filenames:
                     if not (filename.endswith('.json') or filename.endswith('.json.gz') or 
                             filename.endswith('.txt') or filename.endswith('.txt.gz')):
@@ -94,7 +88,6 @@ class DocumentRepository:
                     
                     file_path = os.path.join(dirpath, filename)
                     
-                    # Extract metadata without loading full content
                     try:
                         doc_id = None
                         doc_title = None
@@ -103,7 +96,6 @@ class DocumentRepository:
                         doc_type = 'json' if '.json' in filename else 'txt'
                         doc_compressed = filename.endswith('.gz')
                         
-                        # For JSON files, extract metadata
                         if doc_type == 'json':
                             if doc_compressed:
                                 with gzip.open(file_path, 'rt', encoding='utf-8') as f:
@@ -118,16 +110,14 @@ class DocumentRepository:
                             doc_published = metadata.get('published', '')
                             doc_authors = metadata.get('authors', [])
                         else:
-                            # For TXT files, extract from filename
                             doc_id = os.path.splitext(filename)[0]
                             if doc_compressed:
-                                doc_id = os.path.splitext(doc_id)[0]  # Remove .gz
+                                doc_id = os.path.splitext(doc_id)[0]
                             doc_title = f"Document {doc_id}"
                             doc_source = "unknown"
                             doc_published = ""
                             doc_authors = []
                             
-                            # Try to read header info from text file
                             try:
                                 if doc_compressed:
                                     opener = gzip.open(file_path, 'rt', encoding='utf-8')
@@ -135,7 +125,6 @@ class DocumentRepository:
                                     opener = open(file_path, 'r', encoding='utf-8')
                                     
                                 with opener as f:
-                                    # Read first few lines for header info
                                     header_lines = [f.readline() for _ in range(10) if f.readline()]
                                     for line in header_lines:
                                         if line.startswith("Title:"):
@@ -152,16 +141,13 @@ class DocumentRepository:
                             except Exception as e:
                                 logger.debug(f"Could not read text file header: {e}")
                         
-                        # Get file stats
                         file_stats = os.stat(file_path)
                         file_size = file_stats.st_size
                         file_modified = datetime.fromtimestamp(file_stats.st_mtime).isoformat()
                         
-                        # Get document hash from hash registry if available
                         if doc_id in self.document_hashes:
                             doc_hash = self.document_hashes[doc_id]
                         
-                        # Add to index
                         self.document_index.append({
                             'id': doc_id,
                             'title': doc_title,
@@ -180,7 +166,6 @@ class DocumentRepository:
                     except Exception as e:
                         logger.error(f"Error indexing document {file_path}: {e}")
             
-            # Sort index by modified date (newest first)
             self.document_index.sort(key=lambda x: x['modified'], reverse=True)
             
             elapsed_time = time.time() - start_time
@@ -197,22 +182,17 @@ class DocumentRepository:
         Search for documents in the repository.
         Returns a list of matching documents.
         """
-        # Ensure index is built
         if self.document_index is None:
             self.build_index()
             
-        # If no index could be built, return empty list
         if not self.document_index:
             return []
             
         results = []
         
-        # Start with all documents
         candidates = self.document_index.copy()
         
-        # Filter by document ID
         if doc_id:
-            # Normalize document IDs for comparison
             normalized_id = self.normalize_id(doc_id)
             candidates = [
                 doc for doc in candidates if 
@@ -221,33 +201,26 @@ class DocumentRepository:
                 self.normalize_id(doc['id']) in normalized_id
             ]
             
-        # Filter by topic
         if topic:
             candidates = [doc for doc in candidates if topic.lower() in doc['topic'].lower()]
             
-        # Filter by source
         if source:
             candidates = [doc for doc in candidates if source.lower() in doc['source'].lower()]
             
-        # Filter by format
         if format:
             candidates = [doc for doc in candidates if doc['type'] == format]
             
-        # Filter by compression
         if compressed is not None:
             candidates = [doc for doc in candidates if doc['compressed'] == compressed]
             
-        # If a query is provided, search in title and content
         if query:
             query = query.lower()
             matching_docs = []
             
-            # First check titles (faster)
             for doc in candidates:
                 if query in doc['title'].lower():
                     matching_docs.append(doc)
                     
-            # For remaining documents, if content is requested, check content
             if include_content:
                 for doc in candidates:
                     if doc in matching_docs:
@@ -262,13 +235,10 @@ class DocumentRepository:
                         
                 candidates = matching_docs
             else:
-                # If we're not checking content, just use title matches
                 candidates = matching_docs
         
-        # Apply limit if needed
         results = candidates[:limit] if limit > 0 else candidates
         
-        # Include content if requested
         if include_content and results:
             for doc in results:
                 try:
@@ -278,7 +248,6 @@ class DocumentRepository:
                     logger.error(f"Error retrieving document content: {e}")
                     doc['content'] = f"Error: {e}"
                     
-        # Remove path from results (usually not needed by callers)
         for doc in results:
             if 'path' in doc:
                 doc.pop('path', None)
@@ -291,7 +260,6 @@ class DocumentRepository:
             raise FileNotFoundError(f"Document not found: {file_path}")
             
         try:
-            # JSON files
             if file_path.endswith('.json') or file_path.endswith('.json.gz'):
                 if compressed:
                     with gzip.open(file_path, 'rt', encoding='utf-8') as f:
@@ -302,7 +270,6 @@ class DocumentRepository:
                 
                 return data.get('content', '')
             
-            # Text files
             else:
                 if compressed:
                     with gzip.open(file_path, 'rt', encoding='utf-8') as f:
@@ -311,7 +278,6 @@ class DocumentRepository:
                     with open(file_path, 'r', encoding='utf-8') as f:
                         content = f.read()
                 
-                # Skip header lines if present
                 lines = content.split('\n')
                 header_end = 0
                 for i, line in enumerate(lines[:10]):
@@ -327,15 +293,12 @@ class DocumentRepository:
     
     def get_document_by_id(self, doc_id):
         """Retrieve a specific document by ID with its content"""
-        # First try an exact search
         results = self.search(doc_id=doc_id, limit=1, include_content=True)
         if results:
             return results[0]
             
-        # Generate alternative versions of the ID to try
         alternative_ids = []
         
-        # If it has underscores, try replacing them with slashes or colons
         if '_' in doc_id:
             alternative_ids.extend([
                 doc_id.replace('_', '/'),
@@ -343,25 +306,22 @@ class DocumentRepository:
                 doc_id.replace('_', '/').replace('_', ':')
             ])
         
-        # If it has slashes, try replacing them with underscores
         if '/' in doc_id:
             alternative_ids.append(doc_id.replace('/', '_'))
             
-        # If it has colons, try replacing them with underscores or URL encoding
         if ':' in doc_id:
             alternative_ids.extend([
                 doc_id.replace(':', '_'),
                 doc_id.replace(':', '%3A')
             ])
             
-        # If it's a URL, try to extract just the path part
         if doc_id.startswith('http'):
             try:
                 import urllib.parse
                 parsed_url = urllib.parse.urlparse(doc_id)
                 path_id = parsed_url.path
                 if path_id.startswith('/'):
-                    path_id = path_id[1:]  # Remove leading slash
+                    path_id = path_id[1:]
                 
                 alternative_ids.extend([
                     path_id,
@@ -370,13 +330,11 @@ class DocumentRepository:
             except:
                 pass
                 
-        # Try all alternative IDs
         for alt_id in alternative_ids:
             results = self.search(doc_id=alt_id, limit=1, include_content=True)
             if results:
                 return results[0]
                 
-        # If no exact match is found, use the normalized ID to check for partial matches
         normalized_id = self.normalize_id(doc_id)
         if self.document_index:
             for doc in self.document_index:
@@ -398,7 +356,6 @@ class DocumentRepository:
             self.build_index()
             
         try:
-            # If we couldn't build an index or it's empty
             if not self.document_index:
                 return {
                     'total_documents': 0,
@@ -422,7 +379,6 @@ class DocumentRepository:
                 }
             }
             
-            # Collect statistics
             for doc in self.document_index:
                 stats['storage_size_bytes'] += doc['size']
                 
@@ -436,7 +392,6 @@ class DocumentRepository:
                     stats['sources'][source] = 0
                 stats['sources'][source] += 1
                 
-            # Add human-readable size
             stats['storage_size_human'] = format_size(stats['storage_size_bytes'])
             
             return stats
@@ -459,7 +414,6 @@ class DocumentRepository:
         Export documents to a single file.
         Returns the number of documents exported.
         """
-        # Search for documents to export
         documents = self.search(query=query, topic=topic, limit=limit, include_content=True)
         
         if not documents:
@@ -467,7 +421,6 @@ class DocumentRepository:
             return 0
             
         try:
-            # Decide format
             if format == 'json':
                 with open(output_file, 'w', encoding='utf-8') as f:
                     json.dump(documents, f, indent=2, ensure_ascii=False)
@@ -502,21 +455,18 @@ class DocumentRepository:
             
         normalized = doc_id.lower()
         
-        # Handle common URL-encoded characters
         normalized = normalized.replace('%3a', ':').replace('%3A', ':')
         normalized = normalized.replace('%2f', '/').replace('%2F', '/')
         
-        # If it's a full URL, extract just the path
         if normalized.startswith('http'):
             try:
                 import urllib.parse
                 parsed_url = urllib.parse.urlparse(normalized)
                 path = parsed_url.path
                 if path.startswith('/'):
-                    path = path[1:]  # Remove leading slash
+                    path = path[1:]
                 normalized = path
             except:
-                # If parsing fails, keep the original
                 pass
                 
         return normalized
@@ -603,7 +553,6 @@ def main():
         print()
         return 0
     
-    # Show stats if requested
     if args.stats:
         stats = repo.get_stats()
         print("\nDocument Repository Statistics:")
@@ -623,7 +572,6 @@ def main():
         print()
         return 0
     
-    # Export documents if requested
     if args.export:
         count = repo.export_documents(
             args.export,
@@ -638,7 +586,6 @@ def main():
             print("No documents were exported")
         return 0
     
-    # Search for documents
     results = repo.search(
         query=args.query,
         doc_id=args.id,
@@ -648,7 +595,6 @@ def main():
         include_content=args.show_content
     )
     
-    # Display results
     if not results:
         print("No documents found matching your criteria")
         return 0
@@ -658,7 +604,6 @@ def main():
     for i, doc in enumerate(results):
         print_document_info(doc, args.show_content, args.content_length)
         
-        # Pagination for large result sets
         if i < len(results) - 1 and (i + 1) % 3 == 0 and len(results) > 3:
             if input(f"\nShowing {i+1} of {len(results)} results. Press Enter to continue, or 'q' to quit: ").lower() == 'q':
                 break

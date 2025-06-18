@@ -10,13 +10,11 @@ import sys
 import logging
 from typing import List, Dict, Any, Optional
 
-# Add project root to path
 script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(script_dir)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)-8s - [%(name)s - %(funcName)s:%(lineno)d] - %(message)s',
@@ -24,14 +22,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Import document repository class from search script
 try:
     from .document_search import DocumentRepository, DEFAULT_DOCUMENT_STORAGE_DIR
 except ImportError as e:
     logger.error(f"Failed to import DocumentRepository: {e}")
     sys.exit(1)
 
-# Global repository instance (will be lazily initialized)
 _repository = None
 
 def get_repository(storage_dir=DEFAULT_DOCUMENT_STORAGE_DIR, refresh=False):
@@ -127,21 +123,16 @@ def export_documents(output_file, query=None, topic=None, limit=0, format='json'
 
 # Example usage
 if __name__ == "__main__":
-    # Just a simple example of how to use this module
     print("\nDocument Repository API Example:")
     
-    # Get available topics
     topics = get_topics()
     print(f"Available Topics ({len(topics)}): {', '.join(topics[:5])}...")
     
-    # Get statistics
     stats = get_stats()
     print(f"Total Documents: {stats.get('total_documents', 0)}")
     print(f"Storage Size: {stats.get('storage_size_human', '0 bytes')}")
     
-    # Find some documents
     if topics:
-        # Try to find documents from the first topic
         first_topic = topics[0]
         docs = find_documents(topic=first_topic, limit=2)
         

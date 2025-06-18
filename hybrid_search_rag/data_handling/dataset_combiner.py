@@ -113,7 +113,6 @@ def combine_and_deduplicate_datasets(
 
     logger.info(f"Total unique metadata items after de-duplication: {len(unique_meta_embed_pairs)}")
 
-    # Prepare final metadata and embeddings for saving
     final_metadata_for_save: List[Dict[str, Any]] = []
     final_embeddings_list_for_stacking: List[np.ndarray] = []
 

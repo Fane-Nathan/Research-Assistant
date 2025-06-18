@@ -7,14 +7,12 @@ import logging
 from tqdm import tqdm
 
 # --- Configuration (EDIT THESE PATHS IF NEEDED) ---
-
 FILE1_PATH = "arxiv_dataset/arxiv_source_docs_kaggle_2.jsonl"
 FILE2_PATH = "arxiv_dataset/arxiv_source_docs_kaggle.jsonl"
 COMBINED_OUTPUT_PATH = "arxiv_dataset/arxiv_cs_papers_dataset_combine_1.jsonl"
 
 # Field to use for deduplication
 ID_FIELD = 'id'
-
 
 # --- Setup Logger ---
 log_dir = "logs"
@@ -56,7 +54,6 @@ def combine_and_deduplicate_jsonl(input_paths: list[str], output_path: str, id_f
     logger.info(f"Output file: {output_path}")
     logger.info(f"Deduplicating based on field: '{id_field}'")
 
-    # Ensure output directory exists
     os.makedirs(os.path.dirname(output_path) or '.', exist_ok=True)
 
     try:
@@ -72,14 +69,13 @@ def combine_and_deduplicate_jsonl(input_paths: list[str], output_path: str, id_f
                     file_size = os.path.getsize(file_path)
                     progress_bar = tqdm(total=file_size, unit='B', unit_scale=True, desc=f"Reading {os.path.basename(file_path)}")
                 except OSError:
-                    progress_bar = None # Handle cases where size can't be determined
+                    progress_bar = None
 
                 try:
                     with open(file_path, 'r', encoding='utf-8') as infile:
                         for line in infile:
                             total_lines_read += 1
                             if progress_bar:
-                                # Update progress by the byte length of the current line
                                 progress_bar.update(len(line.encode('utf-8')))
 
                             line_stripped = line.strip()
@@ -110,7 +106,7 @@ def combine_and_deduplicate_jsonl(input_paths: list[str], output_path: str, id_f
                                 corrupt_lines += 1
                             except Exception as e:
                                 logger.error(f"Unexpected error processing line {total_lines_read} in {file_path}: {e}", exc_info=True)
-                                corrupt_lines +=1 # Mark as corrupt
+                                corrupt_lines += 1
 
                 except Exception as e:
                      logger.error(f"Error reading file {file_path}: {e}", exc_info=True)

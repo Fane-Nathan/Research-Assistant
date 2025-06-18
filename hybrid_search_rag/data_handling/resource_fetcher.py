@@ -13,29 +13,28 @@ import logging
 import os
 import re
 import sys
-import time # Keep time import
+import time 
 import traceback
-from datetime import datetime, timedelta # Ensure timedelta is imported
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
-from urllib.parse import urlparse # Added for title extraction
+from urllib.parse import urlparse 
 
 import fitz  # PyMuPDF
 from bs4 import BeautifulSoup
 
-# Conditional Playwright imports to support deployment environments without Playwright
 try:
     from playwright.sync_api import sync_playwright, Error as PlaywrightSyncError
     from playwright.async_api import async_playwright, Error as PlaywrightAsyncError
     PLAYWRIGHT_AVAILABLE = True
-except ImportError:
-    # Playwright not available - this is expected in some deployment environments
+except ImportError as e:
+    print("Playwright is not installed. Please install it with: pip install playwright")
+    print("You may also need to install the browsers: playwright install")
     sync_playwright = None
     async_playwright = None
     PlaywrightSyncError = Exception
     PlaywrightAsyncError = Exception
     PLAYWRIGHT_AVAILABLE = False
 
-# Imports that were missing or causing issues
 import aiohttp 
 import ssl
 import xml.etree.ElementTree as ET
@@ -47,25 +46,21 @@ CONTENT_TYPE_ARXIV = "arxiv"
 CONTENT_TYPE_FAILED = "failed"
 CONTENT_TYPE_OTHER = "other"
 DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36 StudyAssistantBot/1.0"
-MAX_PAGES_TO_CRAWL_CONFIG = 100 # For crawl_and_fetch_web_articles (even if stubbed)
+MAX_PAGES_TO_CRAWL_CONFIG = 100
 
 # --- Module-Level Logger ---
 _module_logger = logging.getLogger(__name__)
 
-# Log Playwright availability (already determined above)
 if PLAYWRIGHT_AVAILABLE:
     _module_logger.info("Async Playwright API is available.")
 else:
     _module_logger.warning("Playwright not found. Web crawling features requiring it will be limited.")
 
-# --- Helper function for User Agent (if needed by async part) ---
 def get_user_agent() -> str: 
     return DEFAULT_USER_AGENT
 
-# --- Module-Level Helper Functions (Defined ONCE) ---
 def _clean_text(text: Optional[str]) -> Optional[str]:
     if text is None:
-        # _module_logger.debug("Helper_CleanText: Input is None.") # Debug, can be noisy
         return None
     try:
         text = text.replace('\\t', ' ')  
@@ -77,8 +72,6 @@ def _clean_text(text: Optional[str]) -> Optional[str]:
             '\u2019': "'", 
             '\u201c': '"',
             '\u201d': '"',
-            # Fix typical arXiv paper issues with space insertion 
-            # between letters (e.g., "a l g o r i t h m" → "algorithm")
             ' i o n': 'ion',
             ' a t i o n': 'ation',
             ' t i o n': 'tion',
@@ -371,11 +364,9 @@ class ResourceFetcher:
         log_prefix = "RFetcher._handle_async_fetching"
         self.logger.debug(f"{log_prefix} - Starting async fetching of {url}.")
         
-        # For arXiv PDFs, use aiohttp for direct download
         if is_arxiv_pdf_link or url.endswith('.pdf'):
             return await self._fetch_pdf_with_aiohttp(url, source)
         
-        # For other content, this remains a placeholder
         self.logger.warning(f"{log_prefix} - Async fetching for non-PDF {url} is not implemented.")
         return None
 
@@ -385,7 +376,6 @@ class ResourceFetcher:
         self.logger.info(f"{log_prefix} - Fetching PDF via aiohttp: {pdf_url}")
         
         try:
-            # Create SSL context that's less strict for academic sites
             ssl_context = ssl.create_default_context()
             ssl_context.check_hostname = False
             ssl_context.verify_mode = ssl.CERT_NONE
@@ -416,7 +406,6 @@ class ResourceFetcher:
                         self.logger.warning(f"{log_prefix} - No content received from {pdf_url}")
                         return None
                     
-                    # Parse PDF content
                     text_content = _parse_pdf_content(pdf_bytes, pdf_url)
                     
                     if text_content:
@@ -460,17 +449,13 @@ class ResourceFetcher:
             
             self.logger.debug(f"{log_prefix} - Using {parser} parser")
             
-            # Extract title with encoding handling
             title_tag = soup.find('title')
             if title_tag:
-                # Use get_text() for safer title extraction from BeautifulSoup tag
                 raw_title = title_tag.get_text(strip=True)
                 title_text = _clean_text(raw_title)
             
-            # Extract content with better separator handling
             body_tag = soup.find('body')
             if body_tag:
-                # Use \n instead of \\n for separator
                 raw_body_text = body_tag.get_text(separator='\n', strip=True)
                 text_content = _clean_text(raw_body_text)
             else: 
@@ -536,7 +521,6 @@ async def fetch_arxiv_papers(
 
     papers_list = []
     
-    # Helper to safely get text from XML element, defined at a scope accessible by the loop
     def get_element_text(element: Optional[ET.Element]) -> str:
         if element is not None and isinstance(element.text, str):
             return element.text.strip()
@@ -566,7 +550,6 @@ async def fetch_arxiv_papers(
                     logger_to_use.info(f"arXiv Fetch - Max results ({max_results}) reached. Stopping entry processing.")
                     break
                 
-                # The try-except block is now correctly indented for each entry processing
                 try:
                     title_elem = entry.find('atom:title', ns)
                     title = get_element_text(title_elem) or "N/A"
@@ -635,7 +618,6 @@ async def fetch_arxiv_papers(
 
                 except Exception as entry_e: 
                     title_for_log_elem = entry.find('atom:title', ns)
-                    # get_element_text is now in scope here
                     title_for_log = get_element_text(title_for_log_elem) or "Unknown Title" 
                     logger_to_use.warning(f"arXiv Fetch - Failed to parse XML entry '{title_for_log}': {entry_e}", exc_info=True)
 
