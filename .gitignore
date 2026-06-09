@@ -167,3 +167,6 @@ Thumbs.db
 *.tmp
 *.temp
 *~
+
+# Streamlit secrets
+.streamlit/secrets.toml

@@ -3,7 +3,6 @@
 
 # Keep only essential system libraries
 libfontconfig1
-libpng16-16
 
 # Removed all Playwright browser dependencies:
 # libnss3, libnspr4, libdbus-glib-1-2, libatk1.0-0, libatk-bridge2.0-0

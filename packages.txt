@@ -1,2 +1,1 @@
 libfontconfig1
-libpng16-16
