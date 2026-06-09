@@ -114,8 +114,10 @@ def load_components(force_reload: bool = False) -> Dict[str, Any]:
         bm25_filename=config.BM25_INDEX_FILE
     )
     metadata, embeddings, bm25_index_obj = data_manager.load_all_data()
+    if metadata is None:
+        metadata = []
 
-    metadata_count = len(metadata) if metadata else 0
+    metadata_count = len(metadata)
     knowledge_base_is_empty = metadata_count == 0
     status_message = f"Loaded {metadata_count} metadata items. "
 
@@ -218,7 +220,7 @@ async def run_recommendation(
         embeddings: Optional[np.ndarray] = components.get("embeddings")
         bm25_index: Optional[BM25Okapi] = components.get("bm25_index")
 
-        if not recommender or not metadata:
+        if recommender is None or metadata is None:
             raise RuntimeError("Core components (recommender/metadata) not loaded. Cannot generate recommendation.")
 
         params = RecommendationParams(

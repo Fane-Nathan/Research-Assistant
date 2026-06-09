@@ -121,7 +121,7 @@ def run_evaluation_in_app():
             rag_components, recommender, data_manager = st.session_state.rag_components, st.session_state.rag_components['recommender'], st.session_state.rag_components['data_manager']
             status.update(label="Initializing evaluation modules...")
             reranker, evaluator = ReRanker(), RetrievalEvaluator(recommender)
-            resource_metadata, resource_embeddings, bm25_index = data_manager.get_all_metadata(), data_manager.get_all_embeddings(), data_manager.get_bm25_index()
+            resource_metadata, resource_embeddings, bm25_index = rag_components.get('metadata'), rag_components.get('embeddings'), rag_components.get('bm25_index')
             params, final_metrics = RecommendationParams(top_n_final=20, top_n_rerank=10, semantic_candidates=50, keyword_candidates=50, fusion_k=20), RetrievalEvaluationMetrics()
             total_queries, start_time = len(evaluation_dataset), time.time()
             progress_bar = st.progress(0, text=f"Starting evaluation of {total_queries} queries...")
