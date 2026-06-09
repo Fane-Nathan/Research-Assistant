@@ -114,9 +114,46 @@ def run_evaluation_in_app():
     try:
         with st.status("Executing RAG evaluation...", expanded=True) as status:
             eval_dataset_path = "data_store/evaluation_sets/evaluation_dataset_llm_labeled.json"
-            status.update(label=f"Loading dataset: `{eval_dataset_path}`")
-            with open(eval_dataset_path, 'r', encoding='utf-8') as f:
-                eval_data = json.load(f)
+            
+            # Load the evaluation dataset or bootstrap a synthetic one from the active knowledge base
+            if os.path.exists(eval_dataset_path):
+                status.update(label=f"Loading dataset: `{eval_dataset_path}`")
+                with open(eval_dataset_path, 'r', encoding='utf-8') as f:
+                    eval_data = json.load(f)
+            else:
+                status.update(label="Evaluation dataset file not found. Bootstrapping synthetic dataset from current knowledge base...")
+                rag_components = st.session_state.rag_components
+                resource_metadata = rag_components.get('metadata')
+                if not resource_metadata:
+                    raise FileNotFoundError(
+                        f"Evaluation dataset file `{eval_dataset_path}` not found, "
+                        "and the knowledge base is empty. Please add papers first before running evaluation."
+                    )
+                
+                # Generate up to 10 synthetic evaluation items from the active metadata
+                import random
+                sample_size = min(10, len(resource_metadata))
+                sampled_docs = random.sample(resource_metadata, sample_size)
+                eval_data = []
+                for doc in sampled_docs:
+                    text = doc.get('chunk_text', '')
+                    title = doc.get('original_title', '')
+                    chunk_id = doc.get('chunk_id', doc.get('entry_id', ''))
+                    
+                    # Use title if valid, fallback to snippet
+                    query_text = title if (title and title != 'N/A' and len(title.split()) >= 3) else " ".join(text.split()[:10])
+                    if query_text:
+                        eval_data.append({
+                            "query_text": query_text.strip(),
+                            "relevant_doc_ids": [chunk_id]
+                        })
+                
+                if not eval_data:
+                    raise FileNotFoundError(
+                        f"Evaluation dataset file `{eval_dataset_path}` not found, "
+                        "and failed to bootstrap a synthetic dataset."
+                    )
+            
             evaluation_dataset = [{"query": item["query_text"], "relevant_docs": set(item["relevant_doc_ids"])} for item in eval_data]
             rag_components, recommender, data_manager = st.session_state.rag_components, st.session_state.rag_components['recommender'], st.session_state.rag_components['data_manager']
             status.update(label="Initializing evaluation modules...")
