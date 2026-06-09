@@ -133,7 +133,7 @@ LLM_API_TIMEOUT: Final[int] = 60 # Timeout in seconds (adjust as needed)
 # ==============================================================================
 # --- Embedding Model Configuration ---
 # ==============================================================================
-EMBEDDING_MODEL_NAME: Final[str] = 'models/text-embedding-004'
+EMBEDDING_MODEL_NAME: Final[str] = 'models/gemini-embedding-001'
 EMBEDDING_DIM: Final[int] = 768
 VERTEX_AI_BATCH_LIMIT: Final[int] = 100
 

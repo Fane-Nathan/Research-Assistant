@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 GOOGLE_API_KEY = config.GOOGLE_API_KEY
 
 # Model and batching settings
-GEMINI_EMBEDDING_MODEL_ID = getattr(config, 'GEMINI_EMBEDDING_MODEL', "models/text-embedding-004")
+GEMINI_EMBEDDING_MODEL_ID = getattr(config, 'GEMINI_EMBEDDING_MODEL', "models/gemini-embedding-001")
 GEMINI_API_BATCH_LIMIT = getattr(config, 'GEMINI_API_BATCH_LIMIT', 100)
 API_DELAY_SECONDS = getattr(config, 'EMBEDDING_API_DELAY', 0.1)
 
