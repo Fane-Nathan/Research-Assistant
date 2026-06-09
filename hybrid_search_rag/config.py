@@ -107,9 +107,11 @@ LLM_PROVIDER_ORDER: Final[List[str]] = ["google", "groq", "deepseek"]
 # The interface will iterate through these models for the first provider in
 # LLM_PROVIDER_ORDER, then move to the models for the second provider, etc.
 LLM_GOOGLE_MODELS: Final[List[str]] = [
-    "gemini-2.5-flash-preview-05-20",
-    "gemini-2.0-flash",                # Older alias
-    "gemini-2.5-pro-preview-06-05",   # Fallback Google choice
+    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash",
+    "gemini-3-flash",
+    "gemini-2.5-flash-lite",
+    "gemini-2.5-flash",
 ]
 LLM_GROQ_MODELS: Final[List[str]] = [
     "qwen-qwq-32b",
