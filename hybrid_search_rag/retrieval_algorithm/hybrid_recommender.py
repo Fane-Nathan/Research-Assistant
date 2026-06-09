@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 class NltkManager:
     """Manages NLTK data and tokenization, ensuring data is available."""
     NLTK_STOPWORDS: Optional[set[str]] = None
-    NLTK_DATA_AVAILABLE: Dict[str, bool] = {'punkt': False, 'stopwords': False}
+    NLTK_DATA_AVAILABLE: Dict[str, bool] = {'punkt': False, 'punkt_tab': False, 'stopwords': False}
     _nltk_checked_init = False
 
     def __init__(self):
@@ -45,10 +45,14 @@ class NltkManager:
     @classmethod
     def _check_and_load_nltk_data(cls):
         """
-        Checks for required NLTK data ('punkt' for tokenization, 'stopwords').
+        Checks for required NLTK data ('punkt' and 'punkt_tab' for tokenization, 'stopwords').
         Attempts to download them if missing.
         """
-        data_to_check = {'punkt': 'tokenizers/punkt', 'stopwords': 'corpora/stopwords'}
+        data_to_check = {
+            'punkt': 'tokenizers/punkt',
+            'punkt_tab': 'tokenizers/punkt_tab',
+            'stopwords': 'corpora/stopwords'
+        }
         needs_download = []
         initial_availability = cls.NLTK_DATA_AVAILABLE.copy()
 

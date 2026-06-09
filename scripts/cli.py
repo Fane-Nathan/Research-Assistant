@@ -65,7 +65,7 @@ def check_nltk_data() -> bool:
     logger.info("Performing NLTK data check (CLI version)...")
     try:
         manager = NltkManager()
-        if manager.NLTK_DATA_AVAILABLE.get('punkt') and manager.NLTK_DATA_AVAILABLE.get('stopwords'):
+        if (manager.NLTK_DATA_AVAILABLE.get('punkt') or manager.NLTK_DATA_AVAILABLE.get('punkt_tab')) and manager.NLTK_DATA_AVAILABLE.get('stopwords'):
              logger.info("All required NLTK data packages appear to be available.")
              return True
         else:
