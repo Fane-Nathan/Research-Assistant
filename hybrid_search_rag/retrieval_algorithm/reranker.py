@@ -1,7 +1,6 @@
 # hybrid_search_rag/retrieval_algorithm/reranker.py
 import logging
 from typing import List, Dict, Any, Tuple
-from sentence_transformers.cross_encoder import CrossEncoder
 
 logger = logging.getLogger(__name__)
 
@@ -18,10 +17,14 @@ class ReRanker:
         """
         try:
             logger.info(f"Initializing ReRanker with model: {model_name}")
+            from sentence_transformers.cross_encoder import CrossEncoder
             self.model = CrossEncoder(model_name)
             logger.info("Cross-Encoder model loaded successfully.")
+        except ImportError as e:
+            logger.error(f"Failed to import 'sentence-transformers'. Re-ranking will be disabled. Error: {e}")
+            self.model = None
         except Exception as e:
-            logger.error(f"Failed to load Cross-Encoder model '{model_name}'. Please ensure 'sentence-transformers' is installed and the model name is correct. Error: {e}", exc_info=True)
+            logger.error(f"Failed to load Cross-Encoder model '{model_name}'. Error: {e}", exc_info=True)
             self.model = None
 
     def rerank(self, query: str, documents: List[Dict[str, Any]]) -> List[Tuple[Dict[str, Any], float]]:

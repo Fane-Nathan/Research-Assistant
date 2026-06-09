@@ -16,12 +16,7 @@ from .. import config
 logger = logging.getLogger(__name__)
 
 # --- Configuration ---
-try:
-    GOOGLE_API_KEY = config.GOOGLE_API_KEY
-    if not GOOGLE_API_KEY:
-        raise RuntimeError("GOOGLE_API_KEY not set in config or .env file.")
-except (AttributeError, ValueError) as e:
-    raise RuntimeError(f"Configuration Error: {e}. Cannot initialize Gemini EmbeddingModel.") from e
+GOOGLE_API_KEY = config.GOOGLE_API_KEY
 
 # Model and batching settings
 GEMINI_EMBEDDING_MODEL_ID = getattr(config, 'GEMINI_EMBEDDING_MODEL', "models/text-embedding-004")
@@ -55,13 +50,14 @@ class EmbeddingModel:
         self.model_name = model_name
         logger.info(f"Initializing EmbeddingModel for Gemini API (model: {self.model_name})")
 
-        if not GOOGLE_API_KEY:
+        api_key = config.GOOGLE_API_KEY
+        if not api_key:
             raise RuntimeError("GOOGLE_API_KEY not found. Cannot initialize Gemini EmbeddingModel.")
 
         if not EmbeddingModel._is_configured:
             try:
                 logger.info("Configuring Google Generative AI library...")
-                genai.configure(api_key=GOOGLE_API_KEY) # type: ignore
+                genai.configure(api_key=api_key) # type: ignore
                 EmbeddingModel._is_configured = True
                 logger.info("Google Generative AI library configured.")
             except Exception as e:

@@ -74,10 +74,25 @@ logger.info(f"Expected BM25 index file path: {_full_bm25_path}")
 # ==============================================================================
 # --- API Keys & Cloud Configuration ---
 # ==============================================================================
-# Load API keys from environment variables (set in .env file).
-GOOGLE_API_KEY: Final[Optional[str]] = os.getenv("GOOGLE_API_KEY")
-GROQ_API_KEY: Final[Optional[str]] = os.getenv("GROQ_API_KEY")
-DEEPSEEK_API_KEY: Final[Optional[str]] = os.getenv("DEEPSEEK_API_KEY")
+# Load API keys from environment variables or Streamlit secrets fallback.
+def _get_api_key(key_name: str) -> Optional[str]:
+    # 1. Try environment variable
+    val = os.getenv(key_name)
+    if val:
+        return val
+    # 2. Try Streamlit secrets if running in Streamlit
+    try:
+        import streamlit as st
+        if st.runtime.exists() and hasattr(st, "secrets") and st.secrets is not None:
+            if key_name in st.secrets:
+                return st.secrets[key_name]
+    except Exception:
+        pass
+    return None
+
+GOOGLE_API_KEY: Final[Optional[str]] = _get_api_key("GOOGLE_API_KEY")
+GROQ_API_KEY: Final[Optional[str]] = _get_api_key("GROQ_API_KEY")
+DEEPSEEK_API_KEY: Final[Optional[str]] = _get_api_key("DEEPSEEK_API_KEY")
 
 
 # ==============================================================================

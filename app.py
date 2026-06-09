@@ -49,7 +49,7 @@ try:
         run_recommendation as cli_run_recommendation_async,
         check_nltk_data as check_nltk_data_cli,
     )
-except ImportError as e:
+except Exception as e:
     st.error(f"A critical project module failed to import: `{e}`. The application cannot continue.")
     st.stop()
 
@@ -90,16 +90,23 @@ def format_expander_title(source: dict) -> str:
 
 def initialize_and_load_components():
     force_reload = st.session_state.get("force_component_reload", False)
-    with st.spinner("Initializing RAG system components..."):
-        loaded_data_dict = load_components_cli(force_reload=force_reload)
-    st.session_state.force_component_reload = False
-    if loaded_data_dict:
-        st.session_state.rag_components = loaded_data_dict
-        st.session_state.components_loaded_successfully = bool(loaded_data_dict.get("recommender"))
-        st.session_state.knowledge_base_is_empty = loaded_data_dict.get("knowledge_base_is_empty", True)
-    else:
+    st.session_state.component_load_error = None
+    try:
+        with st.spinner("Initializing RAG system components..."):
+            loaded_data_dict = load_components_cli(force_reload=force_reload)
+        st.session_state.force_component_reload = False
+        if loaded_data_dict:
+            st.session_state.rag_components = loaded_data_dict
+            st.session_state.components_loaded_successfully = bool(loaded_data_dict.get("recommender"))
+            st.session_state.knowledge_base_is_empty = loaded_data_dict.get("knowledge_base_is_empty", True)
+        else:
+            st.session_state.components_loaded_successfully = False
+            st.session_state.knowledge_base_is_empty = True
+    except Exception as e:
+        st.session_state.force_component_reload = False
         st.session_state.components_loaded_successfully = False
         st.session_state.knowledge_base_is_empty = True
+        st.session_state.component_load_error = str(e)
 
 def run_evaluation_in_app():
     st.session_state.evaluation_running = True
@@ -190,6 +197,10 @@ def render_sidebar():
             if st.button("🔄 Reload RAG Components", use_container_width=True):
                 st.session_state.force_component_reload = True
                 st.rerun()
+            
+            error_msg = st.session_state.get("component_load_error")
+            if error_msg:
+                st.error(f"Initialization Error: {error_msg}")
         st.subheader("RAG Settings")
         st.toggle("Hybrid Mode", value=True, key="rec_hybrid_mode", help="Allows AI to use general knowledge alongside retrieved documents.")
         st.toggle("Concise Prompting", value=True, key="rec_concise_mode", help="Uses a more direct prompt for faster, less conversational answers.")
